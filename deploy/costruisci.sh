@@ -33,18 +33,39 @@ cp index.php .htaccess .user.ini "$DIST/"
 cp -R app views public "$DIST/"
 
 # ── le librerie, in un archivio solo ─────────────────────────────────────────
-LAVORO="$(mktemp -d)"
-trap 'rm -rf "$LAVORO"' EXIT
-cp -R vendor "$LAVORO/vendor"
-find "$LAVORO/vendor" -type d \( -name 'test' -o -name 'tests' -o -name 'Tests' -o -name 'docs' -o -name 'samples' \) -prune -exec rm -rf {} + 2>/dev/null || true
-find "$LAVORO/vendor" -type f \( -name '*.md' -o -name 'phpunit*' -o -name '.php-cs-fixer*' -o -name '*.yml' -o -name '*.yaml' -o -name '*.dist' -o -name '.DS_Store' \) -delete 2>/dev/null || true
-(cd "$LAVORO" && zip -q -r -X vendor.zip vendor)
-mv "$LAVORO/vendor.zip" "$DIST/vendor.zip"
+# L'archivio si rifa' solo quando vendor cambia davvero: rispedire 1,5 MB a ogni
+# ritocco di una vista sarebbe sprecato, e lascerebbe sul server uno
+# scompattatore senza piu' niente da scompattare.
+IMPRONTA="$( { cd vendor && find . -type f -exec shasum -a 256 {} + | sort; } | shasum -a 256 | cut -d' ' -f1)"
+CACHE_ZIP=deploy/.vendor-cache.zip
+CACHE_SHA=deploy/.vendor-cache.sha
 
-# Il gettone che protegge lo scompattatore: nuovo a ogni build, e sul server lo
-# script si cancella da solo appena ha finito.
-GETTONE="$(openssl rand -hex 16)"
-sed "s/@GETTONE@/$GETTONE/" deploy/scompatta.php.modello > "$DIST/_scompatta.php"
+if [ ! -f "$CACHE_ZIP" ] || [ "$(cat "$CACHE_SHA" 2>/dev/null)" != "$IMPRONTA" ]; then
+  LAVORO="$(mktemp -d)"
+  trap 'rm -rf "$LAVORO"' EXIT
+  cp -R vendor "$LAVORO/vendor"
+  find "$LAVORO/vendor" -type d \( -name 'test' -o -name 'tests' -o -name 'Tests' -o -name 'docs' -o -name 'samples' \) -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$LAVORO/vendor" -type f \( -name '*.md' -o -name 'phpunit*' -o -name '.php-cs-fixer*' -o -name '*.yml' -o -name '*.yaml' -o -name '*.dist' -o -name '.DS_Store' \) -delete 2>/dev/null || true
+  (cd "$LAVORO" && zip -q -r -X vendor.zip vendor)
+  mv "$LAVORO/vendor.zip" "$CACHE_ZIP"
+  printf '%s' "$IMPRONTA" > "$CACHE_SHA"
+  VENDOR_NUOVO=1
+else
+  VENDOR_NUOVO=0
+fi
+
+# Il gettone deriva dall'impronta: a librerie invariate resta lo stesso, quindi
+# il deploy incrementale non rispedisce nulla.
+GETTONE="$(printf '%s' "$IMPRONTA" | shasum -a 256 | cut -c1-32)"
+
+# L'archivio entra in _dist solo se c'e' qualcosa da scompattare: altrimenti
+# resterebbe sul server uno script eseguibile che non serve piu' a niente.
+SERVE_SCOMPATTARE=0
+if [ "$VENDOR_NUOVO" = 1 ] || [ "${FORZA_VENDOR:-0}" = 1 ]; then
+  cp "$CACHE_ZIP" "$DIST/vendor.zip"
+  sed "s/@GETTONE@/$GETTONE/" deploy/scompatta.php.modello > "$DIST/_scompatta.php"
+  SERVE_SCOMPATTARE=1
+fi
 
 # ── le cartelle dei dati: solo il guscio e la protezione ─────────────────────
 # Il database e i file convertiti nascono sul server e restano li'.
@@ -65,7 +86,12 @@ done
 find "$DIST" -name '.DS_Store' -delete
 
 echo "_dist pronta: $(find "$DIST" -type f | wc -l | tr -d ' ') file, $(du -sh "$DIST" | cut -f1)"
-echo
-echo "Dopo il caricamento, apri una volta sola:"
-echo "  https://www.vblite.com/convert/_scompatta.php?k=$GETTONE"
-echo "Scompatta le librerie e poi cancella se stesso e l'archivio."
+
+if [ "$SERVE_SCOMPATTARE" = 1 ]; then
+  echo
+  echo "Le librerie sono cambiate: dopo il caricamento apri una volta sola"
+  echo "  https://www.vblite.com/convert/_scompatta.php?k=$GETTONE"
+  echo "Scompatta e poi cancella se stesso e l'archivio."
+else
+  echo "Librerie invariate: nessun archivio da spedire (FORZA_VENDOR=1 per rimandarlo)."
+fi

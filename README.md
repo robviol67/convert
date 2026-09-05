@@ -144,9 +144,29 @@ Se `exec()` è disabilitata (capita sugli hosting condivisi), la conversione gir
 in linea nella stessa richiesta invece che in un processo distaccato: funziona
 lo stesso, ma la pagina di avanzamento resta ferma finché non ha finito.
 
+### Una trappola dell'hosting, per chi verrà dopo
+
+Le password si cifrano con **bcrypt**, non con Argon2id, e non è una svista.
+
+Argon2id su questo PHP c'è (`password_algos()` lo elenca), ma con i parametri
+di serie chiede **64 MB di memoria nativa** — fuori dal `memory_limit` di PHP —
+e sul pool FPM di questo hosting condiviso il processo viene ucciso di netto:
+nessuna eccezione, nessuna riga nei log, solo la pagina 500 statica di Plesk.
+Trovato creando i primi due utenti in produzione.
+
+Il punto insidioso è che **non è intercettabile a runtime**: un processo ucciso
+non esegue nessun blocco `catch`, quindi non esiste un «prova Argon2, se fallisce
+ripiega su bcrypt». Va deciso prima. Bcrypt a costo 12 è robusto, sta in memoria
+costante ed è ovunque; se un domani si vuole tornare ad Argon2 va imposto un
+`memory_cost` basso (19 MB circa) e **provato sul server** prima di darlo per buono.
+
+Per questo la diagnostica non si limita a dire quale algoritmo c'è: **cifra e
+riverifica davvero**, e fa la stessa cosa con una scrittura sul database. Senza
+SSH, un controllo che non esegue l'operazione vera non serve a niente.
+
 ### Sicurezza
 
-- Password come hash **Argon2id**, mai in chiaro.
+- Password come hash **bcrypt** (costo 12), mai in chiaro.
 - Sessione su cookie `HttpOnly`, `Secure`, `SameSite=Lax`.
 - Gettone anti-CSRF su tutte le POST.
 - Freno sui tentativi di accesso: 8 ogni 15 minuti per email+IP.

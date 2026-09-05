@@ -121,10 +121,31 @@ final class Auth
             ->execute([self::hash($password), $userId]);
     }
 
+    /** Costo di bcrypt: ~0,25 s per hash, che a un login e' impercettibile. */
+    private const COSTO_BCRYPT = 12;
+
+    /**
+     * Bcrypt, di proposito.
+     *
+     * Argon2id sarebbe migliore sulla carta, e su questo PHP c'e' pure. Ma con
+     * i parametri di serie chiede 64 MB di memoria NATIVA — fuori dal
+     * memory_limit — e sul pool FPM di questo hosting condiviso il processo
+     * viene ucciso: nessuna eccezione, nessun log, solo un 500 di Apache.
+     * Trovato in produzione, e non e' intercettabile a runtime: un processo
+     * ucciso non esegue nessun blocco catch. Quindi non si tenta nemmeno.
+     *
+     * Bcrypt a costo 12 e' robusto, sta in memoria costante ed e' ovunque.
+     * Se un domani si vuole tornare ad Argon2, va imposto un memory_cost basso
+     * (19 MB circa) e provato sul server prima di darlo per buono.
+     */
+    public static function algoritmo(): string
+    {
+        return PASSWORD_BCRYPT;
+    }
+
     public static function hash(string $password): string
     {
-        return password_hash($password, PASSWORD_ARGON2ID)
-            ?: password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+        return password_hash($password, PASSWORD_BCRYPT, ['cost' => self::COSTO_BCRYPT]);
     }
 
     /** Gettone anti-CSRF, uno per sessione. */

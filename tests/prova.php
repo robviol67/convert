@@ -78,6 +78,21 @@ verifica(
 );
 verifica('categoria camera assente', null, Normalizza::categoriaCamera('nessuna parentesi qui'));
 
+// ── Password ─────────────────────────────────────────────────────────────
+// Argon2 esiste solo se PHP e' compilato con libargon2. Dove non c'e', la
+// costante PASSWORD_ARGON2ID non e' definita e nominarla e' un errore fatale:
+// e' cosi' che la prima installazione in produzione e' andata in 500.
+$algoritmo = \Vblite\Convert\Auth::algoritmo();
+vero('l\'algoritmo scelto e\' davvero disponibile', in_array($algoritmo, array_merge(password_algos(), [PASSWORD_BCRYPT]), true));
+
+$hash = \Vblite\Convert\Auth::hash('unapasswordlunga');
+vero('la password si verifica contro il proprio hash', password_verify('unapasswordlunga', $hash));
+verifica('una password sbagliata non passa', false, password_verify('altracosa', $hash));
+
+// Anche il ripiego deve reggere: e' quello che gira sul server.
+$conBcrypt = password_hash('unapasswordlunga', PASSWORD_BCRYPT, ['cost' => 12]);
+vero('bcrypt come ripiego funziona', password_verify('unapasswordlunga', $conBcrypt));
+
 // ── Tracciato in uscita ──────────────────────────────────────────────────
 $testate = (new ScrittoreScidoo())->testate();
 verifica('32 colonne in uscita', 32, count($testate));

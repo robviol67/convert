@@ -113,6 +113,31 @@ final class Installazione
         $memoria = (int) ini_get('memory_limit');
         $aggiungi('memory_limit ≥ 256M', (string) ini_get('memory_limit'), $memoria === -1 || $mega('memory_limit') >= 256);
 
+        // Non basta sapere quale algoritmo c'e': va provato davvero. Su questo
+        // hosting Argon2 esiste ma uccide il processo — vedi Auth::algoritmo().
+        $algoritmo = Auth::algoritmo();
+        $nome = $algoritmo === PASSWORD_BCRYPT ? 'bcrypt · costo 12' : (string) $algoritmo;
+        try {
+            $prova = Auth::hash('prova-di-cifratura');
+            $ok    = is_string($prova) && $prova !== '' && password_verify('prova-di-cifratura', $prova);
+            $aggiungi('cifratura delle password', $ok ? $nome . ' · funziona' : $nome . ' · NON verifica', $ok);
+        } catch (\Throwable $e) {
+            $aggiungi('cifratura delle password', $nome . ' · ' . $e->getMessage(), false);
+        }
+
+        // E nemmeno basta che la cartella sia scrivibile: SQLite in WAL ha bisogno
+        // di creare i file laterali, e su alcuni filesystem condivisi non ci riesce.
+        // Si prova una scrittura vera, e poi si pulisce.
+        try {
+            $pdo = Database::pdo();
+            $pdo->exec('CREATE TABLE IF NOT EXISTS prova_scrittura (id INTEGER PRIMARY KEY, quando TEXT)');
+            $pdo->prepare('INSERT INTO prova_scrittura (quando) VALUES (?)')->execute([gmdate('c')]);
+            $pdo->exec('DROP TABLE prova_scrittura');
+            $aggiungi('scrittura sul database', 'ok', true);
+        } catch (\Throwable $e) {
+            $aggiungi('scrittura sul database', $e->getMessage(), false);
+        }
+
         $disabilitate = array_map('trim', explode(',', (string) ini_get('disable_functions')));
         $exec = !in_array('exec', $disabilitate, true) && function_exists('exec');
         $aggiungi(

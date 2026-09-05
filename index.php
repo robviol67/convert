@@ -12,9 +12,13 @@ use Vblite\Convert\Config;
 use Vblite\Convert\Conversioni\OctoScidoo\Raggruppatore;
 use Vblite\Convert\Conversioni\Registro;
 use Vblite\Convert\Database;
+use Vblite\Convert\Errori;
 use Vblite\Convert\Installazione;
 use Vblite\Convert\Job;
 use Vblite\Convert\Vista;
+
+// Prima di tutto: senza SSH un errore fatale sarebbe una pagina bianca.
+Errori::registra();
 
 mb_internal_encoding('UTF-8');
 date_default_timezone_set('Europe/Rome');
@@ -70,7 +74,17 @@ switch ($pagina) {
 
     case 'diagnostica':
         Auth::richiedi();
-        Vista::rendi('diagnostica', ['controlli' => Installazione::controlli()]);
+        Vista::rendi('diagnostica', [
+            'controlli' => Installazione::controlli(),
+            'errori'    => Errori::ultimi(10),
+        ]);
+        break;
+
+    case 'svuota_errori':
+        Auth::richiedi();
+        $verificaCsrf();
+        Errori::svuota();
+        header('Location: ?p=diagnostica');
         break;
 
     // ─────────────────────────────────────────────── 2a · Accesso
