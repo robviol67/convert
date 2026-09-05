@@ -126,8 +126,18 @@ if (is_file($tracciato)) {
 }
 
 // ── Registro delle tipologie ─────────────────────────────────────────────
-verifica('una sola tipologia attiva', 1, count(Registro::tutte()));
-vero('tipologia trovata per chiave', Registro::trova('octo_scidoo') !== null);
+// Il registro cresce: la verifica non conta le tipologie, controlla che la
+// propria ci sia e che le altre non le stiano davanti.
+vero('la tipologia Octo → Scidoo è registrata', Registro::trova('octo_scidoo') !== null);
+vero('ogni tipologia registrata ha un manifest con un titolo', array_reduce(
+    Registro::tutte(),
+    static fn(bool $ok, $c): bool => $ok && ($c->manifest()['titolo'] ?? '') !== '',
+    true
+));
+vero('le chiavi delle tipologie sono distinte', count(array_unique(array_map(
+    static fn($c): string => $c::chiave(),
+    Registro::tutte()
+))) === count(Registro::tutte()));
 verifica('chiave sconosciuta', null, Registro::trova('inesistente'));
 
 // ── Pipeline sul PDF reale ───────────────────────────────────────────────

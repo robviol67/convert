@@ -98,8 +98,21 @@ final class Job
         // essere applicate al file gia' scritto: il risultato resta il prodotto
         // di un unico passaggio, non di ritocchi sovrapposti.
         $regole['correzioni'] = self::correzioni($jobId);
-        $estensione = ($regole['formato'] ?? 'xlsx') === 'csv' ? 'csv' : 'xlsx';
-        $nomeUscita = 'File Import Prenotazioni.' . $estensione;
+
+        // Il nome del file caricato serve alle tipologie che lo riusano per
+        // battezzare quello che producono.
+        $regole['nome_originale'] = (string) $job['nome_originale'];
+        // Formato e nome del file prodotto li dichiara la tipologia: qui non
+        // deve esserci niente che sappia di prenotazioni o di documenti.
+        $manifest   = $conversione->manifest();
+        $formati    = $manifest['formati_uscita'] ?? ['xlsx' => 'XLSX'];
+        $formato    = (string) ($regole['formato'] ?? array_key_first($formati));
+        $estensione = isset($formati[$formato]) ? $formato : (string) array_key_first($formati);
+
+        $base = $manifest['nome_uscita']
+            ?? pathinfo((string) $job['nome_originale'], PATHINFO_FILENAME);
+
+        $nomeUscita = $base . '.' . $estensione;
         $fileOut    = Config::cartellaUscita() . '/' . $job['riferimento'] . '-v' . $job['versione'] . '.' . $estensione;
 
         if (!is_dir(dirname($fileOut))) {
@@ -130,6 +143,18 @@ final class Job
             self::fallisci($jobId, $e->getMessage());
 
             return;
+        }
+
+        // Una conversione può consegnare in un formato diverso da quello chiesto
+        // — per esempio uno zip, quando il documento porta immagini a fianco.
+        if (isset($risultato['estensione']) && $risultato['estensione'] !== $estensione) {
+            $estensione = (string) $risultato['estensione'];
+            $nuovo      = Config::cartellaUscita() . '/' . $job['riferimento'] . '-v' . $job['versione'] . '.' . $estensione;
+            if (is_file($fileOut) && $fileOut !== $nuovo) {
+                rename($fileOut, $nuovo);
+            }
+            $fileOut    = $nuovo;
+            $nomeUscita = $base . '.' . $estensione;
         }
 
         // Le anomalie sono derivate: si rifanno a ogni giro. Le correzioni no.

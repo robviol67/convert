@@ -7,6 +7,8 @@
 use Vblite\Convert\Config;
 use Vblite\Convert\Vista;
 
+$lessico = Vista::lessico((string) $job['tipologia']);
+
 $passoCorrente = 3;
 require __DIR__ . '/parti/passi.php';
 
@@ -27,10 +29,9 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
         <div style="margin-top:var(--space-6)"><a class="btn btn-primary" href="?p=home">Riprova</a></div>
       <?php else: ?>
         <p class="kick" style="margin:0 0 var(--space-3);color:var(--color-accent-700)">Conversione completata</p>
-        <h2 class="h1" style="font-size:50px;max-width:20ch"><?= Vista::numero($job['righe_scritte']) ?> prenotazioni, pronte per Scidoo.</h2>
+        <h2 class="h1" style="font-size:50px;max-width:20ch"><?= Vista::e(sprintf($lessico['pronto'], Vista::numero($job['righe_scritte']))) ?></h2>
         <p class="lede">
-          <?= Vista::numero($job['righe_lette']) ?> righe cliente raggruppate in <?= Vista::numero($job['righe_scritte']) ?> prenotazioni,
-          32 colonne, date come date e importi come valuta.
+          <?= Vista::e(sprintf($lessico['sommario'], Vista::numero($job['righe_lette']), Vista::numero($job['righe_scritte']))) ?>
         </p>
 
         <div style="display:flex;gap:var(--space-3);align-items:center;margin-top:var(--space-6)">
@@ -44,7 +45,7 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
         </p>
 
         <div style="display:flex;gap:var(--space-6);margin-top:var(--space-8);padding-top:var(--space-4);border-top:1px solid var(--color-divider)">
-          <a class="btn btn-ghost" href="?p=carica&amp;t=<?= Vista::e($job['tipologia']) ?>">Converti un altro PDF</a>
+          <a class="btn btn-ghost" href="?p=carica&amp;t=<?= Vista::e($job['tipologia']) ?>">Converti un altro file</a>
           <form method="post" action="?p=rifai&amp;job=<?= Vista::e($job['riferimento']) ?>" style="display:inline">
             <input type="hidden" name="csrf" value="<?= Vista::e(\Vblite\Convert\Auth::gettone()) ?>">
             <button class="btn btn-ghost" type="submit">Rifai con le stesse regole</button>
@@ -58,8 +59,8 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6) var(--space-4);max-width:430px">
         <?php
         $lastre = [
-            [Vista::numero($job['righe_scritte']), 'prenotazioni scritte'],
-            [Vista::numero($job['righe_lette']), 'righe cliente lette'],
+            [Vista::numero($job['righe_scritte']), $lessico['unita_plurale'] . ' scritti'],
+            [Vista::numero($job['righe_lette']), $lessico['origine']],
             [$durata === null ? '—' : sprintf('%02d:%02d', intdiv($durata, 60), $durata % 60), 'tempo'],
         ];
         foreach ($lastre as [$numero, $etichetta]): ?>
@@ -85,7 +86,7 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
 
       <?php if ($anteprima['righe'] !== []): ?>
         <div class="foglio" style="margin-top:var(--space-6);max-width:430px">
-          <p class="kick" style="margin:0 0 var(--space-3)">Prime righe del tracciato</p>
+          <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($lessico['anteprima'] ?? 'Prime righe del tracciato') ?></p>
           <?php
             // Le colonne dell'anteprima le decide il motore, non questa pagina:
             // una tipologia diversa ne mostrera' altre senza che qui cambi nulla.
@@ -113,7 +114,7 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
   </div>
 
   <div class="foot">
-    <span class="mono" style="color:rgba(32,30,29,.5)">job #<?= Vista::e($job['riferimento']) ?> · Octo → Scidoo · <?= Vista::e($utente['nome']) ?></span>
+    <span class="mono" style="color:rgba(32,30,29,.5)">job #<?= Vista::e($job['riferimento']) ?> · <?= Vista::e(Vista::tipologia((string) $job['tipologia'])) ?> · <?= Vista::e($utente['nome']) ?></span>
     <a href="?p=storico" style="font-size:14px">Vedi nello storico</a>
   </div>
 </div>

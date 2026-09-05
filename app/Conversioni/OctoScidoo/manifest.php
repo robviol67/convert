@@ -67,6 +67,34 @@ return [
         ['chiave' => 'salta_annullate',           'titolo' => 'Salta le prenotazioni annullate', 'nota' => null, 'default' => true],
     ],
 
+    'formati_uscita'      => ['xlsx' => 'XLSX', 'csv' => 'CSV'],
+    'estensioni_ingresso' => ['pdf'],
+    'nome_uscita'         => 'File Import Prenotazioni',
+    'max_pagine'          => 500,
+    'ha_periodo'          => true,
+
+    // Come si chiamano le cose, in questa tipologia. Le schermate sono uniche:
+    // il vocabolario no, e metterlo qui evita di scrivere «prenotazioni» dove
+    // un domani ci saranno paragrafi.
+    'lessico' => [
+        'unita'          => 'prenotazione',
+        'unita_plurale'  => 'prenotazioni',
+        'origine'        => 'righe cliente',
+        'pronto'         => '%s prenotazioni, pronte per Scidoo.',
+        'sommario'       => '%1$s righe cliente raggruppate in %2$s prenotazioni, 32 colonne, date come date e importi come valuta.',
+        'anteprima'      => 'Prime righe del tracciato',
+        'passi'          => [
+            'Testata Octorate riconosciuta · 23 colonne',
+            'Righe cliente estratte',
+            'Raggruppamento per N°pren.',
+            'Conteggio Adulti / Bambini / Neonati',
+            'Pulizia commenti OTA',
+            'Scrittura tracciato Scidoo · 32 colonne',
+        ],
+    ],
+    'invito_upload'       => "Trascina il PDF in quest'area",
+    'nota_uscita'         => 'Intestazioni e ordine colonne dal tuo <span class="mono">File Import Prenotazioni.xlsx</span>.',
+
     'sorgenti_camera' => [
         'cam'    => 'Dalla colonna Cam. (7, 8, 9…)',
         'gruppo' => 'Dalla colonna Gruppo',

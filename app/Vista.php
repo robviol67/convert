@@ -42,6 +42,39 @@ final class Vista
         return $conversione?->manifest()['titolo'];
     }
 
+    /**
+     * Il titolo di una tipologia, dalla sua chiave.
+     *
+     * Le viste non devono conoscere le tipologie per nome: aggiungerne una o
+     * rinominarla non deve far toccare una pagina.
+     */
+    public static function tipologia(string $chiave): string
+    {
+        $conversione = \Vblite\Convert\Conversioni\Registro::trova($chiave);
+
+        return $conversione?->manifest()['titolo'] ?? $chiave;
+    }
+
+    /**
+     * Il vocabolario della tipologia: come chiamare le cose in questa pagina.
+     *
+     * @return array<string,mixed>
+     */
+    public static function lessico(string $chiave): array
+    {
+        $conversione = \Vblite\Convert\Conversioni\Registro::trova($chiave);
+        $lessico     = $conversione?->manifest()['lessico'] ?? [];
+
+        return $lessico + [
+            'unita'         => 'riga',
+            'unita_plurale' => 'righe',
+            'origine'       => 'righe lette',
+            'pronto'        => '%s righe, pronte.',
+            'sommario'      => '%1$s righe lette, %2$s scritte.',
+            'passi'         => [],
+        ];
+    }
+
     public static function e(?string $testo): string
     {
         return htmlspecialchars((string) $testo, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

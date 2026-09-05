@@ -25,14 +25,18 @@ require __DIR__ . '/parti/passi.php';
       <form id="form-upload" method="post" action="?p=upload" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
         <input type="hidden" name="tipologia" value="<?= Vista::e($manifest['chiave']) ?>">
-        <input type="file" name="file" id="file" accept="application/pdf" class="nascosto">
+        <?php
+          $ammesse = $manifest['estensioni_ingresso'] ?? ['pdf'];
+          $accetta = implode(',', array_map(static fn(string $e): string => '.' . $e, $ammesse));
+        ?>
+        <input type="file" name="file" id="file" accept="<?= Vista::e($accetta) ?>" class="nascosto">
 
         <div class="drop" id="drop" style="margin-top:var(--space-6);min-height:300px">
           <div>
             <div class="dsheet halftone" style="width:82px;margin:0 auto var(--space-4)">
               <i style="width:60%"></i><i></i><i></i><i style="width:45%"></i><i></i><i style="width:75%"></i><i></i>
             </div>
-            <p style="font:600 24px/1.2 var(--font-heading);margin:0" id="drop-titolo">Trascina il PDF in quest'area</p>
+            <p style="font:600 24px/1.2 var(--font-heading);margin:0" id="drop-titolo"><?= Vista::e($manifest['invito_upload'] ?? "Trascina il PDF in quest'area") ?></p>
             <p style="font-size:15px;color:rgba(32,30,29,.55);margin:10px 0 var(--space-4)" id="drop-nota">o seleziona dal computer</p>
             <button class="btn btn-primary" type="button" id="scegli">Scegli un file</button>
           </div>

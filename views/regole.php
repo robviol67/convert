@@ -93,17 +93,24 @@ $default = Raggruppatore::REGOLE_DEFAULT;
 
     <div style="display:flex;flex-direction:column;gap:var(--space-6)">
       <div>
-        <p class="kick" style="margin:0 0 var(--space-3)">Tracciato in uscita</p>
+        <p class="kick" style="margin:0 0 var(--space-3)">Formato in uscita</p>
         <div class="seg">
-          <label class="seg-opt"><input type="radio" name="formato" value="xlsx" checked><span>XLSX</span></label>
-          <label class="seg-opt"><input type="radio" name="formato" value="csv"><span>CSV</span></label>
+          <?php foreach (($manifest['formati_uscita'] ?? ['xlsx' => 'XLSX']) as $chiave => $etichetta): ?>
+            <label class="seg-opt">
+              <input type="radio" name="formato" value="<?= Vista::e((string) $chiave) ?>"
+                     <?= $chiave === array_key_first($manifest['formati_uscita'] ?? ['xlsx' => '']) ? 'checked' : '' ?>>
+              <span><?= Vista::e($etichetta) ?></span>
+            </label>
+          <?php endforeach; ?>
         </div>
-        <p style="font-size:13px;color:rgba(32,30,29,.55);margin:var(--space-2) 0 0">
-          Intestazioni e ordine colonne dal tuo <span class="mono">File Import Prenotazioni.xlsx</span>.
-        </p>
+        <?php if (!empty($manifest['nota_uscita'])): ?>
+          <p style="font-size:13px;color:rgba(32,30,29,.55);margin:var(--space-2) 0 0">
+            <?= $manifest['nota_uscita'] ?>
+          </p>
+        <?php endif; ?>
       </div>
 
-      <div>
+      <div<?= empty($manifest['ha_periodo']) ? ' hidden' : '' ?>>
         <p class="kick" style="margin:0 0 var(--space-3)">Periodo da convertire</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
           <div class="field"><label for="dal">Dal</label><input class="input" id="dal" name="periodo_dal" value="<?= Vista::e($intestazione['dal'] ?? '') ?>"></div>

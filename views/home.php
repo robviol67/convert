@@ -17,7 +17,7 @@ use Vblite\Convert\Vista;
       <a class="tile" href="?p=carica&amp;t=<?= Vista::e($tipologia::chiave()) ?>">
         <span class="tag tag-accent" style="align-self:flex-start">Attiva</span>
         <span style="font:600 24px/1.15 var(--font-heading)"><?= Vista::e($m['titolo']) ?></span>
-        <span style="font-size:14px;color:rgba(32,30,29,.65);line-height:1.5"><?= Vista::e($m['sottotitolo']) ?> Raggruppa le righe ospite per numero di prenotazione.</span>
+        <span style="font-size:14px;color:rgba(32,30,29,.65);line-height:1.5"><?= Vista::e($m['sottotitolo']) ?></span>
         <span class="mono" style="color:rgba(32,30,29,.45);margin-top:auto;padding-top:var(--space-3)">
           <?php if ($c !== null): ?>
             <?= Vista::numero($c['n']) ?> conversion<?= $c['n'] === 1 ? 'e' : 'i' ?> · ultima <?= Vista::e(Vista::quando($c['ultima'])) ?>
@@ -46,7 +46,7 @@ use Vblite\Convert\Vista;
         <thead><tr>
           <th>File</th>
           <th style="width:170px">Tipologia</th>
-          <th style="width:110px;text-align:right">Prenotazioni</th>
+          <th style="width:110px;text-align:right">Righe</th>
           <th style="width:150px">Esito</th>
           <th style="width:130px">Quando</th>
           <th style="width:110px"></th>
@@ -55,7 +55,7 @@ use Vblite\Convert\Vista;
         <?php foreach ($ultime as $i => $job): ?>
           <tr>
             <td><?= $i === 0 ? '<strong>' : '' ?><?= Vista::e($job['nome_originale']) ?><?= $i === 0 ? '</strong>' : '' ?></td>
-            <td>Octo → Scidoo</td>
+            <td><?= Vista::e(Vista::tipologia((string) $job['tipologia'])) ?></td>
             <td class="mono" style="text-align:right"><?= Vista::numero($job['righe_scritte']) ?></td>
             <td><?php require __DIR__ . '/parti/esito.php'; ?></td>
             <td class="mono"><?= Vista::e(Vista::quando($job['creato_il'])) ?></td>

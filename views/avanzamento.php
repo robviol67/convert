@@ -7,6 +7,8 @@
 use Vblite\Convert\Auth;
 use Vblite\Convert\Vista;
 
+$lessico = Vista::lessico((string) $job['tipologia']);
+
 $passoCorrente = 3;
 require __DIR__ . '/parti/passi.php';
 ?>
@@ -52,37 +54,25 @@ require __DIR__ . '/parti/passi.php';
   /* Ogni passo dice da se' quando e' concluso: la testata si riconosce alla prima
      pagina, le righe si contano a lettura finita, e cosi' via. Cosi' due passi
      della stessa fase non risultano entrambi «in corso». */
+  var etichette = <?= json_encode($lessico['passi'], JSON_UNESCAPED_UNICODE) ?>;
+
+  /* Ogni passo dice da se' quando e' concluso: la testata si riconosce alla
+     prima pagina, le righe si contano a lettura finita, e cosi' via. Cosi' due
+     passi della stessa fase non risultano entrambi «in corso». I nomi li porta
+     la tipologia: la schermata e' una sola, il vocabolario no. */
   var passi = [
-    {
-      testo: 'Testata Octorate riconosciuta · 23 colonne',
-      fatto: function (s) { return s.pagine > 0; },
-      misura: function (s) { return s.pagine > 0 ? 'pag. 1' : '—'; }
-    },
-    {
-      testo: 'Righe cliente estratte',
-      fatto: function (s) { return s.righe_lette > 0; },
-      misura: function (s) { return s.righe_lette > 0 ? gruppi(s.righe_lette) : 'pag. ' + s.pagina_corrente; }
-    },
-    {
-      testo: 'Raggruppamento per N°pren.',
-      fatto: function (s) { return s.righe_scritte > 0; },
-      misura: function (s) { return s.righe_scritte > 0 ? gruppi(s.righe_scritte) + ' pren.' : '—'; }
-    },
-    {
-      testo: 'Conteggio Adulti / Bambini / Neonati',
-      fatto: function (s) { return s.righe_scritte > 0; },
-      misura: function (s) { return s.righe_scritte > 0 ? '&#10003;' : '—'; }
-    },
-    {
-      testo: 'Pulizia commenti OTA',
-      fatto: function (s) { return s.righe_scritte > 0; },
-      misura: function (s) { return s.righe_scritte > 0 ? '&#10003;' : '—'; }
-    },
-    {
-      testo: 'Scrittura tracciato Scidoo · 32 colonne',
-      fatto: function (s) { return ordine[s.passo] >= 4; },
-      misura: function (s) { return ordine[s.passo] >= 3 ? gruppi(s.righe_scritte) : '—'; }
-    }
+    { fatto: function (s) { return s.pagine > 0; },
+      misura: function (s) { return s.pagine > 0 ? 'pag. 1' : '—'; } },
+    { fatto: function (s) { return s.righe_lette > 0; },
+      misura: function (s) { return s.righe_lette > 0 ? gruppi(s.righe_lette) : 'pag. ' + s.pagina_corrente; } },
+    { fatto: function (s) { return s.righe_scritte > 0; },
+      misura: function (s) { return s.righe_scritte > 0 ? gruppi(s.righe_scritte) : '—'; } },
+    { fatto: function (s) { return s.righe_scritte > 0; },
+      misura: function (s) { return s.righe_scritte > 0 ? '&#10003;' : '—'; } },
+    { fatto: function (s) { return s.righe_scritte > 0; },
+      misura: function (s) { return s.righe_scritte > 0 ? '&#10003;' : '—'; } },
+    { fatto: function (s) { return ordine[s.passo] >= 4; },
+      misura: function (s) { return ordine[s.passo] >= 3 ? gruppi(s.righe_scritte) : '—'; } }
   ];
 
   function gruppi(n) { return String(n || 0).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
@@ -90,7 +80,8 @@ require __DIR__ . '/parti/passi.php';
   function disegna(s) {
     var html = '';
     var correnteTrovato = false;
-    passi.forEach(function (passo) {
+    passi.forEach(function (passo, indice) {
+      passo.testo = etichette[indice] || '';
       var stato;
       if (passo.fatto(s)) {
         stato = 'fatto';
@@ -107,7 +98,7 @@ require __DIR__ . '/parti/passi.php';
     });
     if (s.da_rivedere > 0) {
       html += '<div class="scarto"><span>!</span><span><a href="?p=rivedere&job=' + riferimento + '" style="color:var(--color-accent-2-700)">'
-            + gruppi(s.da_rivedere) + ' prenotazioni da rivedere</a></span>'
+            + gruppi(s.da_rivedere) + ' <?= Vista::e($lessico['unita_plurale']) ?> da rivedere</a></span>'
             + '<span class="misura">finora</span></div>';
     }
     document.getElementById('registro').innerHTML = html;
@@ -122,7 +113,7 @@ require __DIR__ . '/parti/passi.php';
       : 'Lettura del PDF…';
     if (s.righe_lette > 0) {
       document.getElementById('dettaglio').textContent =
-        (s.righe_scritte || 0) + ' prenotazioni raggruppate da ' + s.righe_lette + ' righe cliente. '
+        (s.righe_scritte || 0) + ' <?= Vista::e($lessico['unita_plurale']) ?> da ' + s.righe_lette + ' <?= Vista::e($lessico['origine']) ?>. '
         + 'Puoi lasciare questa pagina: la trovi nello storico quando è pronta.';
     }
 

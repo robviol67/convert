@@ -62,7 +62,7 @@ if ($cerca !== '') {
         <?php foreach ($jobs as $i => $job): ?>
           <tr>
             <td><?= $i === 0 ? '<strong>' : '' ?><?= Vista::e($job['nome_originale']) ?><?= $i === 0 ? '</strong>' : '' ?></td>
-            <td>Octo → Scidoo</td>
+            <td><?= Vista::e(Vista::tipologia((string) $job['tipologia'])) ?></td>
             <td><?= Vista::e($job['utente_nome']) ?></td>
             <td class="mono" style="text-align:right"><?= Vista::numero((int) ($job['righe_scritte'] ?? 0)) ?></td>
             <td><?php require __DIR__ . '/parti/esito.php'; ?></td>

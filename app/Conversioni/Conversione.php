@@ -33,4 +33,13 @@ interface Conversione
      * }
      */
     public function converti(string $percorsoIngresso, string $percorsoUscita, array $regole, ?callable $progresso = null): array;
+
+    /**
+     * Legge il file senza produrre niente, per mostrare nello step 2 cosa c'è
+     * dentro prima di scegliere le regole.
+     *
+     * @param array<string,mixed> $regole
+     * @return array<string,mixed>
+     */
+    public function analizza(string $percorsoIngresso, array $regole = []): array;
 }

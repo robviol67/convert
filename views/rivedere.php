@@ -9,6 +9,8 @@
 use Vblite\Convert\Auth;
 use Vblite\Convert\Vista;
 
+$lessico = Vista::lessico((string) $job['tipologia']);
+
 $daCorreggere = array_values(array_filter($anomalie, static fn(array $a): bool => $a['gravita'] === 'correggi'));
 $informative  = array_values(array_filter($anomalie, static fn(array $a): bool => $a['gravita'] === 'informativa'));
 $pagina  = max(1, (int) ($_GET['pag'] ?? 1));
@@ -20,7 +22,7 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
   <div class="tra">
     <div>
       <p class="kick" style="margin:0 0 8px;color:var(--color-accent-2-700)">
-        <?= Vista::numero(count($daCorreggere)) ?> prenotazioni su <?= Vista::numero($job['righe_scritte']) ?>
+        <?= Vista::numero(count($daCorreggere)) ?> <?= Vista::e($lessico['unita_plurale']) ?> su <?= Vista::numero($job['righe_scritte']) ?>
       </p>
       <h2 class="h2">Da rivedere prima dell'import</h2>
       <p class="lede" style="font-size:16px">
@@ -38,7 +40,7 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
     <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
 
     <?php if ($visibili === []): ?>
-      <p style="font-size:15px;color:rgba(32,30,29,.6)">Nessuna prenotazione da rivedere: il tracciato è completo.</p>
+      <p style="font-size:15px;color:rgba(32,30,29,.6)">Niente da rivedere: la conversione è passata tutta.</p>
     <?php else: ?>
       <table class="table" style="width:100%;font-size:13.5px">
         <thead><tr>

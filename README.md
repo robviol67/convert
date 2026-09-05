@@ -1,8 +1,12 @@
 # vblite /convert
 
 Strumento interno di Insert Srl per la conversione di tracciati dati.
-Oggi una sola tipologia: **Octo → Scidoo**, dalla stampa prenotazioni di Octorate
-(PDF) al *File Import Prenotazioni* di Scidoo (XLSX).
+Due tipologie:
+
+- **Octo → Scidoo** — dalla stampa prenotazioni di Octorate (PDF) al
+  *File Import Prenotazioni* di Scidoo (XLSX).
+- **Documenti ↔ Markdown** — Word `.docx`, PDF, RTF e testo semplice verso
+  Markdown, e ritorno.
 
 Architettura scelta: **PHP 8 + SQLite** (opzione A del documento di consegna),
 con la logica di conversione isolata dietro l'interfaccia `Conversione`, così che
@@ -26,11 +30,13 @@ stampa una volta sola.
 ## Verifiche
 
 ```bash
-php tests/prova.php
+bash bin/verifica.sh
 ```
 
-74 verifiche, senza dipendenze esterne (il file prodotto si rilegge con
-`ZipArchive` e `SimpleXML`, non con la libreria che lo ha scritto). Le attese vengono dai due file di esempio
+121 verifiche in due suite — `tests/prova.php` per Octo → Scidoo,
+`tests/documenti.php` per i documenti — senza dipendenze esterne: ogni file
+prodotto si rilegge con gli strumenti di PHP, non con la libreria che lo ha
+scritto. Un validatore che condivide il codice dello scrittore prova poco. Le attese vengono dai due file di esempio
 del committente: 201 pagine, 1.174 righe cliente, 584 prenotazioni, e le
 intestazioni del tracciato confrontate colonna per colonna con il file vero.
 
@@ -76,6 +82,51 @@ public/css/                design system Broadsheet + stili dell'applicazione
 data/convert.db            database (protetto da .htaccess)
 storage/in · storage/out   i file, che non scadono mai
 ```
+
+## Documenti ↔ Markdown
+
+Legge `.docx`, `.pdf`, `.rtf`, `.txt` e `.md` e riscrive in uno qualunque di
+quei formati. Tutto passa da un **modello intermedio** — titoli, paragrafi,
+elenchi, citazioni, codice, tabelle, immagini, righe — così i formati costano
+N + M classi invece di N × M conversioni: aggiungerne uno non tocca gli altri.
+
+| direzione | fedeltà | perché |
+|---|---|---|
+| `docx` → `md` | **alta** | il `.docx` ha struttura vera: stili, numerazioni, tabelle |
+| `md` → `docx` · `rtf` | **alta** | si scrivono gli stili, non solo il testo |
+| `md` → `pdf` | buona | tipografia semplice: titoli, elenchi, tabelle, immagini JPEG |
+| `rtf` → `md` | dipende | quello di Word ha struttura; quello di un generatore di stampe no |
+| `pdf` → `md` | **parziale** | un PDF non ha struttura: si deduce dal corpo del carattere |
+| `txt` ↔ `md` | piena | banale |
+
+Quello che non passa intero viene **dichiarato**, non taciuto: finisce in
+«Da rivedere» come le anomalie delle prenotazioni.
+
+### Le tre cose scritte a mano, e perché
+
+`.docx`, `.pdf` e `.rtf` si scrivono senza librerie, per lo stesso motivo
+dell'XLSX: quelle disponibili tengono il documento in memoria, e qui il tetto è
+~20 MB. Un `.docx` è uno zip con dentro XML; un RTF è testo; un PDF è una
+sequenza di oggetti numerati più una tavola di scostamenti. Scriverli di getto,
+un blocco alla volta su file, costa memoria costante.
+
+Lettore e scrittore lavorano **in catena**: il lettore passa i blocchi allo
+scrittore man mano, e il documento intero non sta mai in memoria. Un report di
+duecento pagine fa 23.000 blocchi e da solo supererebbe il tetto.
+
+Lo stesso vale per il PDF in uscita: usa i font standard (Helvetica, Courier),
+che ogni lettore ha già, quindi non si incorpora niente. In cambio copre gli
+alfabeti dell'Europa occidentale; per greco o cirillico conviene un altro
+formato, e l'applicazione lo dice.
+
+### Cosa resta fuori, dichiarato
+
+- **Word 97-2003 (`.doc`)**: formato binario, nessuna libreria PHP affidabile.
+  Si rifiuta con l'istruzione («aprilo in Word e salvalo come `.docx`») invece
+  di restituire un testo a pezzi senza avvisare.
+- **PDF fatti di scansioni**: senza riconoscimento ottico non c'è testo.
+- **Impaginazione**: colonne, cornici, testo attorno alle figure.
+- **Note a piè di pagina, revisioni, commenti, campi calcolati.**
 
 ### Aggiungere una tipologia di conversione
 

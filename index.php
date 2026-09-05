@@ -9,7 +9,6 @@ require __DIR__ . '/vendor/autoload.php';
 
 use Vblite\Convert\Auth;
 use Vblite\Convert\Config;
-use Vblite\Convert\Conversioni\OctoScidoo\Raggruppatore;
 use Vblite\Convert\Conversioni\Registro;
 use Vblite\Convert\Database;
 use Vblite\Convert\Errori;
@@ -150,9 +149,13 @@ switch ($pagina) {
         Errori::azzeraPassi();
         Errori::passo('upload · ricevuto', ['byte' => $_FILES['file']['size'] ?? 0]);
 
-        $errore = validaUpload($_FILES['file'] ?? null);
+        $manifest = $conversione->manifest();
+        $errore   = validaUpload($_FILES['file'] ?? null, $manifest['estensioni_ingresso'] ?? []);
         if ($errore === null) {
-            $destinazione = Config::cartellaIngresso() . '/' . bin2hex(random_bytes(8)) . '.pdf';
+            // L'estensione si conserva: e' con quella che il lettore giusto
+            // viene scelto quando la conversione parte.
+            $estensione   = strtolower(pathinfo((string) $_FILES['file']['name'], PATHINFO_EXTENSION)) ?: 'bin';
+            $destinazione = Config::cartellaIngresso() . '/' . bin2hex(random_bytes(8)) . '.' . $estensione;
             if (!is_dir(dirname($destinazione))) {
                 mkdir(dirname($destinazione), 0770, true);
             }
@@ -164,9 +167,9 @@ switch ($pagina) {
             if (!$verifica['ok']) {
                 @unlink($destinazione);
                 $errore = $verifica['motivo'];
-            } elseif ($verifica['pagine'] > Config::MAX_PAGINE) {
+            } elseif (($manifest['max_pagine'] ?? 0) > 0 && $verifica['pagine'] > $manifest['max_pagine']) {
                 @unlink($destinazione);
-                $errore = 'Il PDF ha ' . $verifica['pagine'] . ' pagine: il massimo è ' . Config::MAX_PAGINE . '.';
+                $errore = 'Il file ha ' . $verifica['pagine'] . ' pagine: il massimo è ' . $manifest['max_pagine'] . '.';
             } else {
                 $_SESSION['bozza'] = [
                     'tipologia'      => $chiave,
@@ -194,7 +197,7 @@ switch ($pagina) {
         }
         $conversione = Registro::trova($bozza['tipologia']);
         Errori::passo('regole · inizio analisi');
-        $analisi     = $conversione->analizza($bozza['file'], Raggruppatore::REGOLE_DEFAULT);
+        $analisi     = $conversione->analizza($bozza['file']);
         Errori::passo('regole · analisi finita', ['prenotazioni' => $analisi['prenotazioni']]);
         $_SESSION['bozza']['analisi'] = $analisi;
 
@@ -215,7 +218,12 @@ switch ($pagina) {
             header('Location: ?p=home');
             exit;
         }
-        $regole = regoleDaPost($_POST);
+        $conversione = Registro::trova($bozza['tipologia']);
+        if ($conversione === null) {
+            header('Location: ?p=home');
+            exit;
+        }
+        $regole = regoleDaPost($_POST, $conversione->manifest());
 
         if (($_POST['azione'] ?? '') === 'salva_preset') {
             Database::pdo()
@@ -432,8 +440,11 @@ function jobRichiesto(): array
     return $job;
 }
 
-/** @param array<string,mixed>|null $file */
-function validaUpload(?array $file): ?string
+/**
+ * @param array<string,mixed>|null $file
+ * @param list<string>             $ammesse estensioni accettate dalla tipologia
+ */
+function validaUpload(?array $file, array $ammesse = []): ?string
 {
     if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
         return 'Nessun file caricato.';
@@ -448,30 +459,56 @@ function validaUpload(?array $file): ?string
         return 'Il file pesa ' . round($file['size'] / 1024 / 1024) . ' MB: il massimo è ' . (Config::MAX_BYTE / 1024 / 1024) . ' MB.';
     }
 
-    $tipo = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
-    if ($tipo !== 'application/pdf') {
-        return 'Serve un PDF: questo file è ' . $tipo . '.';
+    // Il tipo si giudica dall'estensione dichiarata dalla tipologia: il tipo
+    // MIME di un .md o di un .txt dipende da come lo ha salvato chi lo manda,
+    // e non è un criterio affidabile. Il controllo vero lo fa il lettore, che
+    // rifiuta subito un file che non sa aprire.
+    $estensione = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+    if ($ammesse !== [] && !in_array($estensione, $ammesse, true)) {
+        return $estensione === ''
+            ? 'Il file non ha estensione: non so che formato sia.'
+            : 'Non posso leggere i file .' . $estensione . '. Formati accettati: ' . implode(', ', $ammesse) . '.';
     }
 
     return null;
 }
 
 /**
+ * Le regole scelte nello step 2.
+ *
+ * Le opzioni le dichiara il manifest della tipologia: qui non deve esserci
+ * niente che sappia di prenotazioni o di documenti. Ogni valore che arriva dal
+ * modulo si verifica contro quello che la tipologia ha dichiarato, perché il
+ * modulo lo si può riscrivere a mano.
+ *
  * @param array<string,mixed> $post
+ * @param array<string,mixed> $manifest
  * @return array<string,mixed>
  */
-function regoleDaPost(array $post): array
+function regoleDaPost(array $post, array $manifest): array
 {
-    $regole = Raggruppatore::REGOLE_DEFAULT;
-    foreach (['una_riga_per_prenotazione', 'ripulisci_commenti', 'deduci_categoria_camera', 'salta_annullate', 'bambini_da_supplementi'] as $flag) {
-        $regole[$flag] = isset($post['regole'][$flag]);
+    $regole = [];
+
+    // Formato in uscita: solo uno di quelli dichiarati.
+    $formati = $manifest['formati_uscita'] ?? [];
+    $scelto  = (string) ($post['formato'] ?? '');
+    $regole['formato'] = isset($formati[$scelto]) ? $scelto : (string) array_key_first($formati);
+
+    foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
+        $regole[$regola['chiave']] = isset($post['regole'][$regola['chiave']]);
     }
-    $regole['sorgente_camera'] = in_array($post['sorgente_camera'] ?? '', ['cam', 'gruppo', 'vuoto'], true)
-        ? $post['sorgente_camera']
-        : 'cam';
-    $regole['formato']     = ($post['formato'] ?? 'xlsx') === 'csv' ? 'csv' : 'xlsx';
-    $regole['periodo_dal'] = trim((string) ($post['periodo_dal'] ?? '')) ?: null;
-    $regole['periodo_al']  = trim((string) ($post['periodo_al'] ?? '')) ?: null;
+
+    if (!empty($manifest['sorgenti_camera'])) {
+        $sorgenti = array_keys($manifest['sorgenti_camera']);
+        $regole['sorgente_camera'] = in_array($post['sorgente_camera'] ?? '', $sorgenti, true)
+            ? $post['sorgente_camera']
+            : $sorgenti[0];
+    }
+
+    if (!empty($manifest['ha_periodo'])) {
+        $regole['periodo_dal'] = trim((string) ($post['periodo_dal'] ?? '')) ?: null;
+        $regole['periodo_al']  = trim((string) ($post['periodo_al'] ?? '')) ?: null;
+    }
 
     return $regole;
 }

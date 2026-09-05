@@ -10,7 +10,7 @@ use Vblite\Convert\Vista;
       <h1 class="h1" style="font-size:54px;max-width:16ch">Conversioni di tracciati.</h1>
       <p class="lede">Strumento interno Insert. L'accesso è nominale: ogni conversione resta associata a chi l'ha lanciata.</p>
     </div>
-    <p class="mono" style="color:rgba(32,30,29,.45);margin-top:var(--space-8)">Octo → Scidoo · v1.0 · interno</p>
+    <p class="mono" style="color:rgba(32,30,29,.45);margin-top:var(--space-8)">conversione tracciati · v1.1 · interno</p>
     <div class="reg" style="left:18px;top:18px"></div>
   </div>
 
