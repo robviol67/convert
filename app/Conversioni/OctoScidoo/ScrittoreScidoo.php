@@ -92,33 +92,17 @@ final class ScrittoreScidoo
             throw new \RuntimeException("Serve l'estensione zip di PHP per scrivere un XLSX.");
         }
 
-        // Il foglio si scrive su un file d'appoggio, non in memoria: e' l'unica
-        // parte che cresce col numero di righe.
-        $foglio = tempnam(sys_get_temp_dir(), 'scidoo');
-        if ($foglio === false) {
+        // Il corpo del foglio si scrive su un file d'appoggio, non in memoria:
+        // e' l'unica parte che cresce col numero di righe.
+        $corpo = tempnam(sys_get_temp_dir(), 'scidoo');
+        if ($corpo === false) {
             throw new \RuntimeException('Non riesco a creare un file di appoggio.');
         }
 
-        $f = fopen($foglio, 'w');
+        $f = fopen($corpo, 'w');
         if ($f === false) {
             throw new \RuntimeException('Non riesco a scrivere il file di appoggio.');
         }
-
-        $ultima = $this->lettera(count($this->colonne) - 1);
-
-        fwrite($f, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
-
-        fwrite($f, '<cols>');
-        foreach ($this->colonne as $i => $colonna) {
-            $n = $i + 2; // la colonna A resta libera
-            fwrite($f, sprintf('<col min="%d" max="%d" width="%.2f" customWidth="1"/>', $n, $n, $colonna['larghezza']));
-        }
-        fwrite($f, '<col min="1" max="1" width="8.66" customWidth="1"/></cols>');
-
-        fwrite($f, '<sheetViews><sheetView workbookViewId="0">'
-            . '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
-            . '</sheetView></sheetViews>');
 
         fwrite($f, '<sheetData>');
 
@@ -148,8 +132,34 @@ final class ScrittoreScidoo
             $scritte++;
         }
 
-        fwrite($f, '</sheetData><dimension ref="A1:' . $ultima . ($riga - 1) . '"/></worksheet>');
+        fwrite($f, '</sheetData>');
         fclose($f);
+
+        // Il foglio completo: l'intestazione va scritta ora, perche' <dimension>
+        // vuole sapere l'ultima riga, che si conosce solo a corpo finito.
+        $foglio = tempnam(sys_get_temp_dir(), 'scidoo');
+        if ($foglio === false) {
+            @unlink($corpo);
+            throw new \RuntimeException('Non riesco a creare un file di appoggio.');
+        }
+
+        $g = fopen($foglio, 'w');
+        if ($g === false) {
+            @unlink($corpo);
+            throw new \RuntimeException('Non riesco a scrivere il file di appoggio.');
+        }
+
+        fwrite($g, $this->prologoFoglio($riga - 1));
+
+        // Copia in streaming: il corpo non passa mai per la memoria di PHP.
+        $lettura = fopen($corpo, 'r');
+        if ($lettura !== false) {
+            stream_copy_to_stream($lettura, $g);
+            fclose($lettura);
+        }
+        fwrite($g, '</worksheet>');
+        fclose($g);
+        @unlink($corpo);
 
         $zip = new \ZipArchive();
         @unlink($percorso);
@@ -170,6 +180,44 @@ final class ScrittoreScidoo
         @unlink($foglio);
 
         return $scritte;
+    }
+
+    /**
+     * L'apertura del foglio.
+     *
+     * L'ordine degli elementi non e' una questione di stile: lo schema di
+     * OOXML li dichiara come una sequenza, e Excel la fa rispettare. Deve
+     * essere dimension → sheetViews → sheetFormatPr → cols → sheetData; anche
+     * i <col> vanno in ordine crescente di colonna. Sbagliare l'ordine produce
+     * un file che le librerie piu' tolleranti leggono senza fiatare e che Excel
+     * invece rifiuta, offrendo di «recuperare il contenuto».
+     */
+    private function prologoFoglio(int $ultimaRiga): string
+    {
+        $ultima = $this->lettera(count($this->colonne) - 1);
+
+        $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+            . ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+
+        $xml .= '<dimension ref="A1:' . $ultima . max(1, $ultimaRiga) . '"/>';
+
+        $xml .= '<sheetViews><sheetView workbookViewId="0">'
+            . '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+            . '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>'
+            . '</sheetView></sheetViews>';
+
+        $xml .= '<sheetFormatPr defaultRowHeight="15"/>';
+
+        // La colonna A resta libera ma tiene la sua larghezza, e va per prima.
+        $xml .= '<cols><col min="1" max="1" width="8.66" customWidth="1"/>';
+        foreach ($this->colonne as $i => $colonna) {
+            $n = $i + 2;
+            $xml .= sprintf('<col min="%d" max="%d" width="%.2f" customWidth="1"/>', $n, $n, $colonna['larghezza']);
+        }
+        $xml .= '</cols>';
+
+        return $xml;
     }
 
     /** Una cella del foglio; stringa vuota se non va scritta (cella vuota, mai 0). */

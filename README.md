@@ -176,6 +176,29 @@ picco di **10 MB**. C'è una verifica in `tests/prova.php` che fallisce se una
 conversione supera i 20 MB: è una regressione che altrimenti si vedrebbe solo in
 produzione, e in silenzio.
 
+### Scrivere un XLSX che Excel accetti
+
+Lo schema OOXML dichiara i figli di `<worksheet>` come una **sequenza**, e Excel
+la fa rispettare alla lettera: `dimension` → `sheetViews` → `sheetFormatPr` →
+`cols` → `sheetData`, e i `<col>` in ordine crescente di colonna.
+
+Sbagliare l'ordine produce un file **ben formato come XML** che le librerie
+tolleranti — PhpSpreadsheet, LibreOffice, openpyxl — leggono senza fiatare, e
+che Excel rifiuta offrendo di «recuperare il contenuto». È successo: nessuno dei
+tre validatori disponibili se n'era accorto.
+
+Da qui due conseguenze pratiche:
+
+- `<dimension>` vuole l'ultima riga, che si conosce solo a corpo finito: il
+  corpo si scrive su un file d'appoggio e poi si concatena in streaming sotto
+  l'intestazione. La memoria resta costante.
+- `tests/prova.php` verifica **l'ordine degli elementi e delle colonne**, non
+  solo che il file si rilegga. Un validatore tollerante non avrebbe colto il
+  guasto, e infatti non l'aveva colto.
+
+La verifica finale si fa aprendo in Excel un file generato **dal server**, non
+una copia locale.
+
 ### Una trappola dell'hosting, per chi verrà dopo
 
 Le password si cifrano con **bcrypt**, non con Argon2id, e non è una svista.

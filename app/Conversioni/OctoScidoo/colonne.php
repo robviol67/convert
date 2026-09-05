@@ -13,7 +13,11 @@ declare(strict_types=1);
  * qui altre voci fra «neonati» e «retta»: scrittore e mappatura le seguono.
  */
 return [
-    ['chiave' => 'id',                'testata' => 'ID',                     'tipo' => 'intero',  'larghezza' => 3.83],
+    // Larghezza 8 invece dei 3,83 del file del cliente: li' gli ID di esempio
+    // avevano tre cifre, i N°pren. veri ne hanno quattro o cinque e Excel
+    // mostrerebbe «###». E' un'indicazione di visualizzazione, non un dato: il
+    // valore importato non cambia.
+    ['chiave' => 'id',                'testata' => 'ID',                     'tipo' => 'intero',  'larghezza' => 8],
     ['chiave' => 'nome',              'testata' => 'Nome Cliente',           'tipo' => 'testo',   'larghezza' => 12.33],
     ['chiave' => 'cognome',           'testata' => 'Cognome Cliente',        'tipo' => 'testo',   'larghezza' => 15.33],
     ['chiave' => 'arrivo',            'testata' => 'Data di Arrivo',         'tipo' => 'data',    'larghezza' => 13],

@@ -206,6 +206,19 @@ if (!is_file($pdf)) {
     verifica('prima riga: servizio iniziale', 'Pernotto', $foglio->valore('AD2'));
     verifica('ultima riga scritta', 585, $foglio->ultimaRiga());
 
+    // Excel applica alla lettera la sequenza dichiarata dallo schema OOXML.
+    // Un ordine sbagliato passa inosservato alle librerie tolleranti e fa
+    // rifiutare il file a Excel, che offre di «recuperare il contenuto».
+    $ordine = \Vblite\Convert\Test\LettoreXlsx::ordineElementi($uscita);
+    $attesa = ['dimension', 'sheetViews', 'sheetFormatPr', 'cols', 'sheetData'];
+    verifica('gli elementi del foglio sono nell\'ordine che pretende lo schema', $attesa, $ordine);
+
+    $colonne = \Vblite\Convert\Test\LettoreXlsx::colonneDichiarate($uscita);
+    $ordinate = $colonne;
+    sort($ordinate);
+    verifica('le colonne sono dichiarate in ordine crescente', $ordinate, $colonne);
+    verifica('la prima colonna dichiarata e\' la A', 1, $colonne[0] ?? 0);
+
     // Camera vuota deve restare vuota, mai zero (eccezione 7).
     $zeri = 0;
     for ($r = 2; $r <= 585; $r++) {

@@ -53,6 +53,46 @@ final class LettoreXlsx
         }
     }
 
+    /**
+     * I nomi dei figli diretti di <worksheet>, nell'ordine in cui compaiono.
+     *
+     * Lo schema di OOXML li dichiara come una sequenza e Excel la fa
+     * rispettare: un ordine sbagliato produce un file che le librerie
+     * tolleranti leggono e che Excel rifiuta. Serve poterlo verificare.
+     *
+     * @return list<string>
+     */
+    public static function ordineElementi(string $percorso): array
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($percorso) !== true) {
+            throw new \RuntimeException("Non riesco ad aprire {$percorso}");
+        }
+        $xml = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+
+        $foglio = new \SimpleXMLElement($xml);
+        $nomi   = [];
+        foreach ($foglio->children() as $figlio) {
+            $nomi[] = $figlio->getName();
+        }
+
+        return $nomi;
+    }
+
+    /** @return list<int> i numeri di colonna dichiarati in <cols>, in ordine */
+    public static function colonneDichiarate(string $percorso): array
+    {
+        $zip = new \ZipArchive();
+        $zip->open($percorso);
+        $xml = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+
+        preg_match_all('~<col min="(\d+)"~', $xml, $trovati);
+
+        return array_map('intval', $trovati[1]);
+    }
+
     public function valore(string $coord): ?string
     {
         return $this->celle[$coord]['v'] ?? null;
