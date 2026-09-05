@@ -1,0 +1,90 @@
+<?php
+declare(strict_types=1);
+/**
+ * Scompattatore delle librerie — usa e getta.
+ *
+ * Su questo hosting non c'e' SSH e il deploy e' FTP un file alla volta: le 756
+ * classi di vendor/ salgono come un solo zip, e questo script le apre. Poi
+ * cancella l'archivio e se stesso: non deve restare raggiungibile.
+ *
+ * Protetto da un gettone generato a ogni build, che non finisce nel repository.
+ */
+
+$GETTONE = '@GETTONE@';
+
+header('Content-Type: text/plain; charset=utf-8');
+
+if (!hash_equals($GETTONE, (string) ($_GET['k'] ?? ''))) {
+    http_response_code(404);
+    exit("Non trovato.\n");
+}
+
+$radice  = __DIR__;
+$archivio = $radice . '/vendor.zip';
+
+if (!is_file($archivio)) {
+    exit("vendor.zip non c'è: o è già stato scompattato, o il caricamento non è finito.\n");
+}
+if (!class_exists('ZipArchive')) {
+    exit("ERRORE: l'estensione zip non è attiva su questo PHP. Senza, l'archivio va aperto a mano.\n");
+}
+
+$zip = new ZipArchive();
+$apertura = $zip->open($archivio);
+if ($apertura !== true) {
+    exit("ERRORE: non riesco ad aprire vendor.zip (codice {$apertura}).\n");
+}
+
+// Si toglie di mezzo la versione precedente, altrimenti restano in giro i file
+// di una libreria aggiornata e rimpicciolita.
+$vecchia = $radice . '/vendor';
+if (is_dir($vecchia)) {
+    $elenco = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($vecchia, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($elenco as $voce) {
+        $voce->isDir() ? @rmdir($voce->getPathname()) : @unlink($voce->getPathname());
+    }
+    @rmdir($vecchia);
+}
+
+$quanti = $zip->numFiles;
+if (!$zip->extractTo($radice)) {
+    $zip->close();
+    exit("ERRORE: estrazione fallita. Controlla i permessi di scrittura su {$radice}.\n");
+}
+$zip->close();
+
+echo "Scompattate {$quanti} voci in {$radice}/vendor\n";
+
+// Prova vera: l'autoloader carica, e le due librerie che contano rispondono.
+$autoload = $radice . '/vendor/autoload.php';
+if (!is_file($autoload)) {
+    exit("ERRORE: manca vendor/autoload.php dopo l'estrazione.\n");
+}
+require $autoload;
+
+$mancanti = [];
+foreach ([
+    'Smalot\\PdfParser\\Parser',
+    'PhpOffice\\PhpSpreadsheet\\Spreadsheet',
+    'PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx',
+] as $classe) {
+    if (!class_exists($classe)) {
+        $mancanti[] = $classe;
+    }
+}
+if ($mancanti !== []) {
+    exit("ERRORE: classi non caricate: " . implode(', ', $mancanti) . "\n");
+}
+echo "Autoloader a posto: pdfparser e phpspreadsheet rispondono.\n";
+
+// Pulizia: prima l'archivio, poi se stesso. Da qui in avanti questo indirizzo
+// deve dare 404.
+@unlink($archivio);
+@unlink(__FILE__);
+
+echo "\nArchivio e scompattatore rimossi.\n";
+echo "Adesso: " . (($_SERVER['HTTPS'] ?? '') !== '' ? 'https' : 'http') . '://'
+   . ($_SERVER['HTTP_HOST'] ?? '') . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/') . "/\n";

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "convert",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "127.0.0.1:8899", "-t", "."],
+      "port": 8899
+    }
+  ]
+}

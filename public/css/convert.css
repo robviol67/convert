@@ -1,0 +1,188 @@
+/* vblite /convert — stili dell'applicazione.
+   I valori vengono tutti dal design system Broadsheet (broadsheet.css):
+   qui stanno solo le composizioni proprie di queste schermate. */
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+a { color: var(--color-accent-700); }
+
+/* ── impaginato: 1200px utili, desktop ───────────────────────────────── */
+.sh {
+  width: 1200px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+.shT { width: 1200px; position: relative; }
+
+/* ── barra applicativa ───────────────────────────────────────────────── */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  height: 58px;
+  border-bottom: 1px solid var(--color-divider);
+  flex: none;
+}
+.brand { font: 600 20px/1 var(--font-heading); letter-spacing: -.01em; text-decoration: none; color: var(--color-text); }
+.brand em { font-style: italic; font-weight: 400; color: var(--color-accent-700); }
+.appbar-sep { font-size: 15px; color: rgba(32,30,29,.5); }
+.appbar-tipologia { font: 600 16px var(--font-heading); }
+.rail { display: flex; gap: var(--space-6); align-items: baseline; font-size: 14px; }
+.rail a { color: rgba(32,30,29,.55); text-decoration: none; }
+.rail a:hover, .rail a[aria-current="page"] { color: var(--color-accent-700); }
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--color-neutral-300);
+  display: grid; place-items: center;
+  font: 600 12px var(--font-heading);
+  color: var(--color-neutral-700);
+  text-decoration: none;
+}
+
+/* ── passi del wizard ────────────────────────────────────────────────── */
+.steps { display: flex; gap: var(--space-6); align-items: baseline; padding: var(--space-6) var(--space-8) var(--space-4); flex: none; }
+.step { display: flex; gap: var(--space-2); align-items: baseline; font-size: 15px; color: rgba(32,30,29,.42); }
+.step b {
+  font: 600 13px/1 var(--font-heading);
+  width: 20px; height: 20px; display: grid; place-items: center;
+  border: 1px solid rgba(32,30,29,.28); border-radius: 1px; color: rgba(32,30,29,.5);
+}
+.step.on { color: var(--color-text); }
+.step.on b { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+.step.done b { background: var(--color-accent-100); border-color: var(--color-accent-300); color: var(--color-accent-700); }
+.step.done { color: rgba(32,30,29,.62); }
+
+/* ── corpo e tipografia ──────────────────────────────────────────────── */
+.body { padding: 0 var(--space-8) var(--space-8); flex: 1 0 auto; display: flex; flex-direction: column; }
+.h1 { font: 600 44px/1.05 var(--font-heading); letter-spacing: -.02em; margin: 0; }
+.h2 { font: 600 30px/1.1 var(--font-heading); letter-spacing: -.015em; margin: 0; }
+.lede { font: 400 18px/1.5 var(--font-body); color: rgba(32,30,29,.66); max-width: 46ch; margin: var(--space-3) 0 0; }
+.kick { font: 600 11.5px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: rgba(32,30,29,.45); }
+.mono { font: 400 12.5px/1.4 ui-monospace, Menlo, monospace; }
+.muted { color: rgba(32,30,29,.55); }
+
+/* ── area di trascinamento ───────────────────────────────────────────── */
+.drop {
+  border: 1px dashed var(--color-neutral-400);
+  border-radius: var(--radius-md);
+  display: grid; place-items: center; text-align: center;
+  padding: var(--space-8); background: transparent;
+  transition: background .12s ease, border-color .12s ease;
+}
+.drop.hot { border-color: var(--color-accent); background: var(--color-accent-100); }
+body.trascina .sh > *:not(.body), body.trascina .body > *:not(.wizard) { opacity: .4; }
+.dsheet { background: #fff; box-shadow: var(--shadow-sm); padding: 14px 12px; display: flex; flex-direction: column; gap: 5px; }
+.dsheet i { display: block; height: 4px; background: var(--color-neutral-300); border-radius: 1px; }
+
+/* ── piede delle schermate ───────────────────────────────────────────── */
+.foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  padding-top: var(--space-4); border-top: 1px solid var(--color-divider); margin-top: auto;
+}
+
+/* ── mirino di registro (accesso) ────────────────────────────────────── */
+.reg { position: absolute; width: 16px; height: 16px; opacity: .35; }
+.reg::before, .reg::after { content: ""; position: absolute; background: var(--color-text); }
+.reg::before { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-.5px); }
+.reg::after { top: 50%; left: 0; height: 1px; width: 100%; transform: translateY(-.5px); }
+
+/* ── tabella delle regole di conversione ─────────────────────────────── */
+.mrow {
+  display: grid; grid-template-columns: 1.05fr 20px 1fr 1.25fr;
+  gap: var(--space-3); align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--color-divider); font-size: 13.5px;
+}
+.mrow.hd { border-bottom: 1px solid var(--color-text); padding-bottom: 6px; }
+.arw { color: var(--color-accent); text-align: center; }
+.arw.scarto { color: var(--color-accent-2-700); }
+
+/* ── tessere delle tipologie ─────────────────────────────────────────── */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+.tile {
+  background: #fff; box-shadow: var(--shadow-sm); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-2);
+  text-align: left; border: none; cursor: pointer;
+  font-family: var(--font-body); color: inherit; text-decoration: none;
+}
+.tile:hover { box-shadow: var(--shadow-md); outline: 1px solid var(--color-accent-300); }
+.tile.soon { background: transparent; box-shadow: none; border: 1px dashed var(--color-neutral-400); cursor: default; opacity: .75; }
+.tile.soon:hover { outline: none; box-shadow: none; }
+
+/* ── elenchi numerati (le sette eccezioni) ───────────────────────────── */
+.numerato > div {
+  display: grid; grid-template-columns: 20px 1fr; gap: var(--space-3);
+  padding: 7px 0; border-bottom: 1px solid var(--color-divider);
+  font-size: 13.5px; line-height: 1.5;
+}
+.numerato > div:last-child { border-bottom: none; }
+.numerato .n { font: 400 12.5px/1.4 ui-monospace, Menlo, monospace; color: var(--color-accent-2-700); }
+
+/* ── elenchi si-può / non-si-può ─────────────────────────────────────── */
+.check { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; color: rgba(32,30,29,.75); }
+.check > div { display: grid; grid-template-columns: 18px 1fr; gap: 10px; }
+.check .si { color: var(--color-accent-700); }
+.check .no { color: var(--color-accent-2-700); }
+
+/* ── coppie etichetta/valore ─────────────────────────────────────────── */
+.spec { display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; line-height: 1.5; }
+.spec > div { display: flex; gap: var(--space-4); justify-content: space-between; }
+.spec dt, .spec .et { color: rgba(32,30,29,.5); white-space: nowrap; }
+.spec .va { text-align: right; }
+
+/* ── tabelle su fondo bianco ─────────────────────────────────────────── */
+.foglio { background: #fff; box-shadow: var(--shadow-sm); padding: var(--space-4); }
+
+/* ── avanzamento ─────────────────────────────────────────────────────── */
+.barra { height: 2px; background: var(--color-neutral-300); position: relative; overflow: hidden; }
+.barra i { display: block; height: 100%; background: var(--color-accent); transition: width .3s ease; }
+.registro { display: flex; flex-direction: column; font-size: 14px; }
+.registro > div {
+  display: grid; grid-template-columns: 22px 1fr auto;
+  gap: var(--space-3); align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid var(--color-divider);
+}
+.registro > div:last-child { border-bottom: none; }
+.registro .misura { font: 400 12.5px/1.4 ui-monospace, Menlo, monospace; color: rgba(32,30,29,.45); }
+.registro .fatto { color: var(--color-accent); }
+.registro .futuro { color: rgba(32,30,29,.38); }
+.registro .adesso { color: var(--color-text); font-weight: 600; }
+.registro .scarto { color: var(--color-accent-2-700); }
+
+/* ── messaggi ────────────────────────────────────────────────────────── */
+.avviso {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent-2-100);
+  border-left: 2px solid var(--color-accent-2);
+  font-size: 14px;
+}
+.avviso.buono { background: var(--color-accent-100); border-left-color: var(--color-accent); }
+
+/* ── utilita' ────────────────────────────────────────────────────────── */
+.riga { display: flex; align-items: center; gap: var(--space-2); }
+.tra { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+.btn { white-space: nowrap; }
+.btn[disabled] { opacity: .45; pointer-events: none; }
+.nascosto { display: none; }
+
+/* «hidden» deve vincere anche sugli stili in linea che impostano un display. */
+[hidden] { display: none !important; }
+
+/* Le etichette di stato stanno in fila e vanno a capo insieme, non dentro la cella. */
+.tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }

@@ -1,0 +1,8 @@
+# Copia questo file in deploy/carica.conf e riempilo.
+# carica.conf NON va versionato: punta al file delle credenziali.
+
+FTP_HOST=80.88.84.94          # meglio l'IP: il DNS può non essere propagato
+FTP_ROOT=/httpdocs/convert    # document root dell'hosting + /convert
+FTP_NETRC=~/.netrc-vblite     # file in stile netrc, permessi 600
+DIST=_dist
+FTP_PAUSA=0.5                 # pausa fra un file e l'altro: mai in parallelo

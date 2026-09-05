@@ -1,0 +1,15 @@
+/vendor/
+/data/*.db
+/data/*.db-wal
+/data/*.db-shm
+/storage/in/*
+/storage/out/*
+!/storage/in/.gitkeep
+!/storage/out/.gitkeep
+composer.phar
+.DS_Store
+
+# Deploy: la configurazione punta alle credenziali, l'impronta e' locale.
+/deploy/carica.conf
+/.deploy-stato
+/_dist/
