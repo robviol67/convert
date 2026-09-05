@@ -92,7 +92,12 @@ final class Job
             return;
         }
 
-        $regole     = json_decode((string) $job['regole_json'], true) ?: [];
+        $regole = json_decode((string) $job['regole_json'], true) ?: [];
+
+        // Le correzioni fatte a mano rientrano nella conversione invece di
+        // essere applicate al file gia' scritto: il risultato resta il prodotto
+        // di un unico passaggio, non di ritocchi sovrapposti.
+        $regole['correzioni'] = self::correzioni($jobId);
         $estensione = ($regole['formato'] ?? 'xlsx') === 'csv' ? 'csv' : 'xlsx';
         $nomeUscita = 'File Import Prenotazioni.' . $estensione;
         $fileOut    = Config::cartellaUscita() . '/' . $job['riferimento'] . '-v' . $job['versione'] . '.' . $estensione;
@@ -127,6 +132,7 @@ final class Job
             return;
         }
 
+        // Le anomalie sono derivate: si rifanno a ogni giro. Le correzioni no.
         $pdo->prepare('DELETE FROM anomalie WHERE job_id = ?')->execute([$jobId]);
         $inserisci = $pdo->prepare(
             'INSERT INTO anomalie (job_id, chiave, cliente, motivo, colonna, gravita, valore_proposto)
@@ -155,7 +161,8 @@ final class Job
 
         $pdo->prepare(
             "UPDATE jobs SET file_out = ?, nome_uscita = ?, pagine = ?, righe_lette = ?, righe_scritte = ?,
-                             byte_out = ?, passo = 'fatto', esito = ?, concluso_il = datetime('now') WHERE id = ?"
+                             byte_out = ?, anteprima_json = ?, passo = 'fatto', esito = ?,
+                             concluso_il = datetime('now') WHERE id = ?"
         )->execute([
             $fileOut,
             $nomeUscita,
@@ -163,34 +170,100 @@ final class Job
             $risultato['righe_lette'],
             $risultato['righe_scritte'],
             is_file($fileOut) ? filesize($fileOut) : null,
+            json_encode($risultato['anteprima'], JSON_UNESCAPED_UNICODE),
             $daCorreggere > 0 ? self::DA_RIVEDERE : self::COMPLETATA,
             $jobId,
         ]);
     }
 
     /**
-     * Le correzioni dell'utente si riscrivono sopra il file appena generato:
-     * il motore resta deterministico, l'intervento umano e' un secondo passaggio
-     * tracciato nella tabella anomalie.
+     * Le correzioni gia' inserite, pronte per il motore.
+     *
+     * @return array<string,array<string,string>> per N°pren. e colonna Scidoo
+     */
+    private static function correzioni(int $jobId): array
+    {
+        $stmt = Database::pdo()->prepare(
+            "SELECT chiave, colonna, valore FROM correzioni
+             WHERE job_id = ? AND saltata = 0 AND valore IS NOT NULL AND valore <> ''"
+        );
+        $stmt->execute([$jobId]);
+
+        $mappa = [];
+        foreach ($stmt->fetchAll() as $riga) {
+            $mappa[(string) $riga['chiave']][(string) $riga['colonna']] = (string) $riga['valore'];
+        }
+
+        return $mappa;
+    }
+
+    /**
+     * Rigenera il file tenendo conto delle correzioni inserite in «Da rivedere».
+     *
+     * Non si ritoccano celle nel foglio gia' prodotto: la conversione viene
+     * rifatta con le correzioni fra le regole. Costa un secondo e lascia un
+     * risultato che e' sempre il prodotto di un unico passaggio deterministico,
+     * invece di una serie di ritocchi sovrapposti di cui nessuno tiene il conto.
      */
     public static function applicaCorrezioni(int $jobId): void
     {
-        $pdo  = Database::pdo();
-        $job  = self::trova($jobId);
-        if ($job === null || $job['file_out'] === null || !is_file($job['file_out'])) {
+        $pdo     = Database::pdo();
+        $vecchio = self::trova($jobId);
+        if ($vecchio === null) {
             return;
         }
 
-        $stmt = $pdo->prepare("SELECT * FROM anomalie WHERE job_id = ? AND valore_corretto IS NOT NULL AND valore_corretto <> ''");
+        $pdo->prepare('UPDATE jobs SET versione = versione + 1 WHERE id = ?')->execute([$jobId]);
+        self::esegui($jobId);
+
+        // Il giro precedente ha lasciato un file con un altro numero di versione.
+        $nuovo = self::trova($jobId);
+        if ($nuovo !== null && $vecchio['file_out'] !== null
+            && $vecchio['file_out'] !== $nuovo['file_out']
+            && is_file($vecchio['file_out'])) {
+            @unlink($vecchio['file_out']);
+        }
+
+    }
+
+    /** Registra quello che una persona ha deciso su una segnalazione. */
+    public static function salvaCorrezione(int $jobId, string $chiave, string $colonna, ?string $valore, bool $saltata = false): void
+    {
+        $pdo = Database::pdo();
+
+        if (($valore === null || trim($valore) === '') && !$saltata) {
+            $pdo->prepare('DELETE FROM correzioni WHERE job_id = ? AND chiave = ? AND colonna = ?')
+                ->execute([$jobId, $chiave, $colonna]);
+
+            return;
+        }
+
+        $pdo->prepare(
+            'INSERT INTO correzioni (job_id, chiave, colonna, valore, saltata) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (job_id, chiave, colonna)
+             DO UPDATE SET valore = excluded.valore, saltata = excluded.saltata'
+        )->execute([$jobId, $chiave, $colonna, $valore !== null ? trim($valore) : null, $saltata ? 1 : 0]);
+    }
+
+    /**
+     * Le decisioni gia' prese, per riempire i campi in «Da rivedere».
+     *
+     * @return array<string,array{valore:?string,saltata:bool}> per «chiave|colonna»
+     */
+    public static function decisioni(int $jobId): array
+    {
+        $stmt = Database::pdo()->prepare('SELECT chiave, colonna, valore, saltata FROM correzioni WHERE job_id = ?');
         $stmt->execute([$jobId]);
-        $correzioni = $stmt->fetchAll();
-        if ($correzioni === []) {
-            return;
+
+        $mappa = [];
+        foreach ($stmt->fetchAll() as $riga) {
+            $mappa[$riga['chiave'] . '|' . $riga['colonna']] = [
+                'valore'  => $riga['valore'],
+                'saltata' => (int) $riga['saltata'] === 1,
+            ];
         }
 
-        Correzioni::applica($job, $correzioni);
-        $pdo->prepare('UPDATE anomalie SET risolta = 1 WHERE job_id = ? AND valore_corretto IS NOT NULL')->execute([$jobId]);
-        $pdo->prepare('UPDATE jobs SET byte_out = ? WHERE id = ?')->execute([filesize($job['file_out']), $jobId]);
+        return $mappa;
     }
 
     /** @return list<array<string,mixed>> */

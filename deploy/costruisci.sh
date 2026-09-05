@@ -54,18 +54,15 @@ else
   VENDOR_NUOVO=0
 fi
 
-# Il gettone deriva dall'impronta: a librerie invariate resta lo stesso, quindi
-# il deploy incrementale non rispedisce nulla.
+# Il gettone deriva dall'impronta delle librerie: finche' non cambiano, il file
+# resta identico byte per byte. Cosi' archivio e scompattatore entrano sempre in
+# _dist, ma il deploy incrementale — che confronta gli sha — non li rispedisce.
+# Decidere qui di ometterli sarebbe sbagliato: questa build sa cosa e' cambiato
+# dall'ultima build, non cosa c'e' davvero sul server. Quello lo sa .deploy-stato.
 GETTONE="$(printf '%s' "$IMPRONTA" | shasum -a 256 | cut -c1-32)"
 
-# L'archivio entra in _dist solo se c'e' qualcosa da scompattare: altrimenti
-# resterebbe sul server uno script eseguibile che non serve piu' a niente.
-SERVE_SCOMPATTARE=0
-if [ "$VENDOR_NUOVO" = 1 ] || [ "${FORZA_VENDOR:-0}" = 1 ]; then
-  cp "$CACHE_ZIP" "$DIST/vendor.zip"
-  sed "s/@GETTONE@/$GETTONE/" deploy/scompatta.php.modello > "$DIST/_scompatta.php"
-  SERVE_SCOMPATTARE=1
-fi
+cp "$CACHE_ZIP" "$DIST/vendor.zip"
+sed "s/@GETTONE@/$GETTONE/" deploy/scompatta.php.modello > "$DIST/_scompatta.php"
 
 # ── le cartelle dei dati: solo il guscio e la protezione ─────────────────────
 # Il database e i file convertiti nascono sul server e restano li'.
@@ -87,11 +84,11 @@ find "$DIST" -name '.DS_Store' -delete
 
 echo "_dist pronta: $(find "$DIST" -type f | wc -l | tr -d ' ') file, $(du -sh "$DIST" | cut -f1)"
 
-if [ "$SERVE_SCOMPATTARE" = 1 ]; then
-  echo
-  echo "Le librerie sono cambiate: dopo il caricamento apri una volta sola"
-  echo "  https://www.vblite.com/convert/_scompatta.php?k=$GETTONE"
-  echo "Scompatta e poi cancella se stesso e l'archivio."
+echo
+if [ "$VENDOR_NUOVO" = 1 ]; then
+  echo "Librerie ricostruite."
 else
-  echo "Librerie invariate: nessun archivio da spedire (FORZA_VENDOR=1 per rimandarlo)."
+  echo "Librerie invariate rispetto all'ultima build."
 fi
+echo "Se il deploy carica vendor.zip, poi apri una volta sola:"
+echo "  https://www.vblite.com/convert/_scompatta.php?k=$GETTONE"

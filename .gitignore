@@ -1,5 +1,6 @@
 /vendor/
 /data/*.db
+/data/*.log
 /data/*.db-wal
 /data/*.db-shm
 /storage/in/*

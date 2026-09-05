@@ -62,6 +62,59 @@ final class Errori
         }
     }
 
+    /**
+     * Briciola di percorso.
+     *
+     * Quando il processo viene ucciso — memoria nativa esaurita, stack finito,
+     * un'estensione che segfaulta — non scatta nessun gestore e non resta niente
+     * nei log: il 500 e' muto. L'unica cosa che sopravvive e' quello che era
+     * gia' su disco. Questa scrive e forza il flush a ogni passo, cosi' l'ultima
+     * riga presente dice dove si e' fermato.
+     *
+     * @param array<string,scalar> $dati
+     */
+    public static function passo(string $etichetta, array $dati = []): void
+    {
+        static $inizio = null;
+        $inizio ??= microtime(true);
+
+        $riga = sprintf(
+            '%s  %+7.2fs  %5.1fMB  %s',
+            gmdate('H:i:s'),
+            microtime(true) - $inizio,
+            memory_get_peak_usage(true) / 1048576,
+            $etichetta
+        );
+        foreach ($dati as $chiave => $valore) {
+            $riga .= " {$chiave}={$valore}";
+        }
+
+        $percorso = dirname(Config::percorsoDb()) . '/passi.log';
+        if (!is_dir(dirname($percorso))) {
+            @mkdir(dirname($percorso), 0770, true);
+        }
+        // Ogni riga va su disco subito: se il processo muore, deve esserci gia'.
+        $f = @fopen($percorso, 'a');
+        if ($f !== false) {
+            @fwrite($f, $riga . "\n");
+            @fflush($f);
+            @fclose($f);
+        }
+    }
+
+    /** Riparte da zero: le briciole del giro precedente confonderebbero. */
+    public static function azzeraPassi(): void
+    {
+        @unlink(dirname(Config::percorsoDb()) . '/passi.log');
+    }
+
+    public static function passi(): string
+    {
+        $percorso = dirname(Config::percorsoDb()) . '/passi.log';
+
+        return is_file($percorso) ? (string) file_get_contents($percorso) : '';
+    }
+
     /** @return list<array<string,string>> le voci piu' recenti, per la diagnostica */
     public static function ultimi(int $quanti = 10): array
     {

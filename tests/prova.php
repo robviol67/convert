@@ -9,6 +9,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/LettoreXlsx.php';
 
 use Vblite\Convert\Conversioni\OctoScidoo\ConversioneOctoScidoo;
 use Vblite\Convert\Conversioni\OctoScidoo\Normalizza;
@@ -37,6 +38,20 @@ function verifica(string $nome, mixed $atteso, mixed $ottenuto): void
 function vero(string $nome, bool $condizione): void
 {
     verifica($nome, true, $condizione);
+}
+
+/** Indice 0 → «B»: la colonna A del tracciato resta libera. */
+function lettera(int $indice): string
+{
+    $n = $indice + 2;
+    $l = '';
+    while ($n > 0) {
+        $resto = ($n - 1) % 26;
+        $l = chr(65 + $resto) . $l;
+        $n = (int) (($n - $resto) / 26);
+    }
+
+    return $l;
 }
 
 // ── Normalizzatori ───────────────────────────────────────────────────────
@@ -98,11 +113,11 @@ $testate = (new ScrittoreScidoo())->testate();
 verifica('32 colonne in uscita', 32, count($testate));
 
 if (is_file($tracciato)) {
-    $atteso = \PhpOffice\PhpSpreadsheet\IOFactory::load($tracciato)->getSheet(0);
+    $atteso  = new \Vblite\Convert\Test\LettoreXlsx($tracciato);
     $diverse = [];
     foreach ($testate as $i => $testata) {
-        $lettera = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 2);
-        $suo = (string) $atteso->getCell($lettera . '1')->getValue();
+        $lettera = lettera($i);
+        $suo = (string) $atteso->valore($lettera . '1');
         if ($suo !== $testata) {
             $diverse[] = "{$lettera}: «{$suo}» ≠ «{$testata}»";
         }
@@ -166,25 +181,35 @@ if (!is_file($pdf)) {
     verifica('capofila: importo', '416,00', $primo['importo']);
 
     $uscita = sys_get_temp_dir() . '/prova-convert-' . getmypid() . '.xlsx';
+
+    // Il picco va misurato su UNA conversione: nel resto dello script se ne
+    // fanno diverse e il contatore le somma.
+    if (function_exists('memory_reset_peak_usage')) {
+        memory_reset_peak_usage();
+    }
     $out = $conversione->converti($pdf, $uscita, Raggruppatore::REGOLE_DEFAULT);
+    $piccoConversione = memory_get_peak_usage(true) / 1048576;
     verifica('584 righe scritte', 584, $out['righe_scritte']);
     vero('il file esiste ed e\' non vuoto', is_file($uscita) && filesize($uscita) > 10000);
 
-    $foglio = \PhpOffice\PhpSpreadsheet\IOFactory::load($uscita)->getSheet(0);
-    verifica('prima riga: ID senza punto', 4256, $foglio->getCell('B2')->getValue());
-    verifica('prima riga: cognome', 'LAUDATI', $foglio->getCell('D2')->getValue());
-    verifica('prima riga: arrivo come data vera', 45307.0, (float) $foglio->getCell('E2')->getValue());
-    vero('arrivo formattato come data', \PhpOffice\PhpSpreadsheet\Shared\Date::isDateTime($foglio->getCell('E2')));
-    verifica('prima riga: camera come testo', '8', $foglio->getCell('G2')->getValue());
-    verifica('prima riga: prezzo come numero', 416.0, (float) $foglio->getCell('T2')->getValue());
-    verifica('prima riga: retta', 'Room Only', $foglio->getCell('S2')->getValue());
-    verifica('prima riga: servizio iniziale', 'Pernotto', $foglio->getCell('AD2')->getValue());
-    verifica('ultima riga scritta', 585, $foglio->getHighestDataRow());
+    $foglio = new \Vblite\Convert\Test\LettoreXlsx($uscita);
+    verifica('prima riga: ID senza punto', '4256', $foglio->valore('B2'));
+    verifica('prima riga: cognome', 'LAUDATI', $foglio->valore('D2'));
+    verifica('prima riga: arrivo come data vera', '45307', $foglio->valore('E2'));
+    vero('arrivo e\' un numero, non testo', $foglio->eNumero('E2'));
+    verifica('arrivo formattato come data', 'm/d/yyyy', $foglio->formato('E2'));
+    verifica('prima riga: camera come testo', '8', $foglio->valore('G2'));
+    vero('camera resta testo, non numero', !$foglio->eNumero('G2'));
+    verifica('prima riga: prezzo come numero', '416', $foglio->valore('T2'));
+    verifica('prezzo formattato come valuta', '#,##0.00\\ "€"', $foglio->formato('T2'));
+    verifica('prima riga: retta', 'Room Only', $foglio->valore('S2'));
+    verifica('prima riga: servizio iniziale', 'Pernotto', $foglio->valore('AD2'));
+    verifica('ultima riga scritta', 585, $foglio->ultimaRiga());
 
     // Camera vuota deve restare vuota, mai zero (eccezione 7).
     $zeri = 0;
     for ($r = 2; $r <= 585; $r++) {
-        if ($foglio->getCell('G' . $r)->getValue() === 0) {
+        if ($foglio->valore('G' . $r) === '0') {
             $zeri++;
         }
     }
@@ -228,6 +253,43 @@ if (!is_file($pdf)) {
     // Il filtro di periodo deve restringere davvero l'uscita.
     $soloGennaio = (new Raggruppatore(['periodo_dal' => '01/01/2024', 'periodo_al' => '31/01/2024']))->raggruppa($estratto['righe']);
     vero('il periodo restringe le prenotazioni', count($soloGennaio['prenotazioni']) < 584 && count($soloGennaio['prenotazioni']) > 0);
+
+    // ── Il vincolo che decide se il lavoro finisce ───────────────────────
+    // In produzione il processo viene fermato poco sopra i 20 MB di dati:
+    // non da PHP, che crede di averne 512, ma dal sistema — senza errore e
+    // senza log. Questa soglia e' la guardia contro una regressione che si
+    // manifesterebbe solo sul server, e in modo muto.
+    vero(
+        sprintf('una conversione sta sotto i 20 MB (picco %.1f MB)', $piccoConversione),
+        $piccoConversione < 20
+    );
+
+    // ── Correzioni fatte a mano ──────────────────────────────────────────
+    // Non ritoccano il foglio: rientrano nella conversione, che si rifa'.
+    $corretto = sys_get_temp_dir() . '/prova-corretto-' . getmypid() . '.xlsx';
+    // Attenzione all'ordine: con «+» vincono le chiavi di sinistra, quindi le
+    // regole proprie vanno a sinistra e i default riempiono i buchi.
+    (new ConversioneOctoScidoo())->converti($pdf, $corretto, [
+        'correzioni' => [
+            '4.256' => ['Adulti · Bambini' => '9 · 3', 'Categoria Camera' => 'Camera Matrimoniale'],
+            '4.277' => ['Prezzo Retta' => '1.234,50'],
+        ],
+    ] + Raggruppatore::REGOLE_DEFAULT);
+    $conCorrezioni = new \Vblite\Convert\Test\LettoreXlsx($corretto);
+    verifica('correzione: adulti', '9', $conCorrezioni->valore('O2'));
+    verifica('correzione: bambini', '3', $conCorrezioni->valore('P2'));
+    verifica('correzione: categoria camera', 'Camera Matrimoniale', $conCorrezioni->valore('H2'));
+    verifica('correzione: prezzo con migliaia', '1234.5', $conCorrezioni->valore('T4'));
+    verifica('le righe non corrette restano tali', 'LAUDATI', $conCorrezioni->valore('D2'));
+    @unlink($corretto);
+
+    // ── CSV ──────────────────────────────────────────────────────────────
+    $csv = sys_get_temp_dir() . '/prova-' . getmypid() . '.csv';
+    (new ConversioneOctoScidoo())->converti($pdf, $csv, ['formato' => 'csv'] + Raggruppatore::REGOLE_DEFAULT);
+    $righeCsv = file($csv, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+    verifica('CSV: 1 intestazione + 584 righe', 585, count($righeCsv));
+    vero('CSV: le date sono leggibili, non seriali', str_contains($righeCsv[1], '16/01/2024'));
+    @unlink($csv);
 
     @unlink($uscita);
 }

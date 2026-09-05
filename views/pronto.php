@@ -86,19 +86,23 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
       <?php if ($anteprima['righe'] !== []): ?>
         <div class="foglio" style="margin-top:var(--space-6);max-width:430px">
           <p class="kick" style="margin:0 0 var(--space-3)">Prime righe del tracciato</p>
+          <?php
+            // Le colonne dell'anteprima le decide il motore, non questa pagina:
+            // una tipologia diversa ne mostrera' altre senza che qui cambi nulla.
+            $aDestra = static fn(int $i): bool => $i >= count($anteprima['testate']) - 2;
+          ?>
           <table class="table" style="width:100%;font-size:12px">
             <thead><tr>
-              <th>ID</th><th>Cognome</th><th>Arrivo</th>
-              <th style="text-align:right">Ad.</th><th style="text-align:right">Retta</th>
+              <?php foreach ($anteprima['testate'] as $i => $testata): ?>
+                <th<?= $aDestra($i) ? ' style="text-align:right"' : '' ?>><?= Vista::e($testata) ?></th>
+              <?php endforeach; ?>
             </tr></thead>
             <tbody>
             <?php foreach ($anteprima['righe'] as $riga): ?>
               <tr>
-                <td class="mono"><?= Vista::e($riga[0]) ?></td>
-                <td><?= Vista::e($riga[2]) ?></td>
-                <td class="mono"><?= Vista::e($riga[3]) ?></td>
-                <td class="mono" style="text-align:right"><?= Vista::e($riga[8]) ?></td>
-                <td class="mono" style="text-align:right"><?= $riga[10] !== '' ? '€ ' . Vista::e($riga[10]) : '' ?></td>
+                <?php foreach ($riga as $i => $valore): ?>
+                  <td class="mono"<?= $aDestra($i) ? ' style="text-align:right"' : '' ?>><?= Vista::e($valore) ?></td>
+                <?php endforeach; ?>
               </tr>
             <?php endforeach; ?>
             </tbody>

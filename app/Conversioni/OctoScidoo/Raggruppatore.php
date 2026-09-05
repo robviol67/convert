@@ -25,6 +25,14 @@ final class Raggruppatore
         'bambini_da_supplementi'    => false,
         'periodo_dal'               => null,    // gg/mm/aaaa
         'periodo_al'                => null,
+        // Correzioni fatte a mano in «Da rivedere», per N°pren. e colonna Scidoo:
+        // ['4.275' => ['Adulti · Bambini' => '2·1']]
+        'correzioni'                => [],
+    ];
+
+    /** Le colonne toccate da una segnalazione, quando non e' una sola. */
+    private const COLONNE_COMPOSTE = [
+        'Adulti · Bambini' => ['adulti', 'bambini'],
     ];
 
     /** Il trattamento Octorate determina insieme Retta e Servizio Iniziale. */
@@ -189,7 +197,7 @@ final class Raggruppatore
             );
         }
 
-        return [
+        $prenotazione = [
             'id'                => Normalizza::id($npren),
             'npren'             => $npren,
             'nome'              => $capofila['nome'],
@@ -228,6 +236,61 @@ final class Raggruppatore
             '_ospiti'           => count($ospiti),
             '_pagina'           => (int) $capofila['pagina'],
         ];
+
+        return $this->applicaCorrezioni($npren, $prenotazione);
+    }
+
+    /**
+     * Sovrascrive i campi corretti a mano.
+     *
+     * La correzione non ritocca il foglio gia' prodotto: rientra nella
+     * conversione, che viene rifatta. Cosi' il file resta il risultato di un
+     * unico passaggio deterministico, e non di una serie di ritocchi
+     * sovrapposti di cui nessuno tiene il conto.
+     *
+     * @param array<string,mixed> $prenotazione
+     * @return array<string,mixed>
+     */
+    private function applicaCorrezioni(string $npren, array $prenotazione): array
+    {
+        $perQuesta = $this->regole['correzioni'][$npren] ?? null;
+        if (!is_array($perQuesta)) {
+            return $prenotazione;
+        }
+
+        $colonne = require __DIR__ . '/colonne.php';
+
+        foreach ($perQuesta as $colonna => $valore) {
+            $valore = trim((string) $valore);
+            if ($valore === '') {
+                continue;
+            }
+
+            if (isset(self::COLONNE_COMPOSTE[$colonna])) {
+                $pezzi = preg_split('~[·,;/\s]+~u', $valore) ?: [];
+                foreach (self::COLONNE_COMPOSTE[$colonna] as $i => $chiave) {
+                    if (isset($pezzi[$i]) && $pezzi[$i] !== '') {
+                        $prenotazione[$chiave] = (int) $pezzi[$i];
+                    }
+                }
+                continue;
+            }
+
+            foreach ($colonne as $definizione) {
+                if (rtrim($definizione['testata']) !== rtrim($colonna)) {
+                    continue;
+                }
+                $prenotazione[$definizione['chiave']] = match ($definizione['tipo']) {
+                    'intero' => (int) $valore,
+                    'valuta' => (float) str_replace(',', '.', str_replace('.', '', $valore)),
+                    'data'   => Normalizza::dataSeriale($valore),
+                    default  => $valore,
+                };
+                break;
+            }
+        }
+
+        return $prenotazione;
     }
 
     /**

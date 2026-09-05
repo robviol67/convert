@@ -4,6 +4,7 @@
  * sapere perché una conversione non riesce.
  * @var list<array{nome:string,valore:string,ok:bool,bloccante:bool}> $controlli
  * @var list<array<string,string>> $errori
+ * @var string $passi
  */
 use Vblite\Convert\Auth;
 use Vblite\Convert\Config;
@@ -66,6 +67,20 @@ $rotti = array_filter($controlli, static fn(array $c): bool => !$c['ok'] && $c['
       </div>
     </div>
   </div>
+
+  <?php if (trim($passi) !== ''): ?>
+    <div style="margin-top:var(--space-8)">
+      <p class="kick" style="margin:0 0 var(--space-3)">Ultima conversione, passo per passo</p>
+      <div class="foglio">
+        <pre class="mono" style="margin:0;white-space:pre-wrap;font-size:12.5px;line-height:1.6"><?= Vista::e($passi) ?></pre>
+      </div>
+      <p style="font-size:13px;color:rgba(32,30,29,.55);margin:var(--space-3) 0 0">
+        Ogni riga è scritta su disco prima del passo successivo. Se il processo viene
+        ucciso — memoria nativa esaurita, stack finito — non resta niente nei log,
+        ma <strong>l'ultima riga qui dice dove si è fermato</strong>.
+      </p>
+    </div>
+  <?php endif; ?>
 
   <?php if ($errori !== []): ?>
     <div style="margin-top:var(--space-8)">

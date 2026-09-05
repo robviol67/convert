@@ -58,6 +58,7 @@ final class Parser
 
         foreach ($pagine as $indice => $pagina) {
             $chunk = $this->chunkOrdinati($pagina->getDataTm());
+            self::liberaPagina($pagina);
 
             if ($indice === 0) {
                 $intestazione = $this->leggiTestata($chunk);
@@ -125,6 +126,38 @@ final class Parser
             'pagine' => count($pagine),
             'intestazione' => $this->leggiTestata($chunk),
         ];
+    }
+
+    /**
+     * Butta via i dati che la pagina si e' tenuta.
+     *
+     * getDataTm() memorizza il risultato in Page::$dataTm, e il Document tiene
+     * tutte le pagine: su una stampa di 201 pagine questo significa portarsi
+     * dietro l'intero documento estratto fino alla fine. Su un hosting con poca
+     * memoria e' la differenza fra finire e non finire — misurato: il processo
+     * moriva alla pagina 186. I dati di una pagina non servono piu' appena
+     * l'abbiamo letta.
+     *
+     * La proprieta' e' protected e la libreria non offre un modo di svuotarla:
+     * si passa dalla riflessione, con la cautela di non rompersi se un domani
+     * quella proprieta' cambiasse nome.
+     */
+    private static function liberaPagina(object $pagina): void
+    {
+        static $proprieta = false;
+
+        if ($proprieta === false) {
+            $proprieta = null;
+            try {
+                // Da PHP 8.1 le proprieta' protette sono gia' raggiungibili
+                // dalla riflessione: setAccessible() non serve piu'.
+                $proprieta = new \ReflectionProperty($pagina, 'dataTm');
+            } catch (\ReflectionException) {
+                // La libreria e' cambiata: si tira dritto, costa solo memoria.
+            }
+        }
+
+        $proprieta?->setValue($pagina, null);
     }
 
     /** @return list<array{x:float,y:float,t:string}> ordinati per riga, poi per colonna */

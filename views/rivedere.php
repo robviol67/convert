@@ -4,6 +4,7 @@
  * incerti e il foglio si riscrive, stesso job, nuova versione.
  * @var array<string,mixed> $job
  * @var list<array<string,mixed>> $anomalie
+ * @var array<string,array{valore:?string,saltata:bool}> $decisioni
  */
 use Vblite\Convert\Auth;
 use Vblite\Convert\Vista;
@@ -50,21 +51,28 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
         </tr></thead>
         <tbody>
         <?php foreach ($visibili as $a): ?>
-          <tr<?= $a['risolta'] ? ' style="opacity:.45"' : '' ?>>
+          <?php
+            // La segnalazione si identifica per N°pren. e colonna: gli id delle
+            // anomalie cambiano a ogni conversione, la decisione presa no.
+            $riferimento = $a['chiave'] . '|' . $a['colonna'];
+            $decisione   = $decisioni[$riferimento] ?? ['valore' => null, 'saltata' => false];
+            $decisa      = $decisione['saltata'] || ($decisione['valore'] ?? '') !== '';
+          ?>
+          <tr<?= $decisa ? ' style="opacity:.45"' : '' ?>>
             <td class="mono"><?= Vista::e($a['chiave']) ?></td>
             <td><?= Vista::e($a['cliente']) ?></td>
             <td><?= Vista::e($a['motivo']) ?></td>
             <td class="mono"><?= Vista::e($a['colonna']) ?></td>
             <td>
               <input class="input" style="padding:5px 8px;font-size:13px;width:180px"
-                     name="correzione[<?= (int) $a['id'] ?>]"
-                     value="<?= Vista::e($a['valore_corretto'] ?? '') ?>"
+                     name="correzione[<?= Vista::e($riferimento) ?>]"
+                     value="<?= Vista::e($decisione['valore'] ?? '') ?>"
                      placeholder="<?= Vista::e($a['valore_proposto'] ?? '') ?>">
             </td>
             <td>
               <label class="btn btn-ghost" style="padding:4px 8px;font-size:13px;cursor:pointer">
-                <input type="checkbox" name="salta[<?= (int) $a['id'] ?>]" value="1" style="margin-right:5px"
-                       <?= $a['risolta'] ? 'checked' : '' ?>>Salta
+                <input type="checkbox" name="salta[<?= Vista::e($riferimento) ?>]" value="1" style="margin-right:5px"
+                       <?= $decisione['saltata'] ? 'checked' : '' ?>>Salta
               </label>
             </td>
           </tr>

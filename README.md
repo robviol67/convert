@@ -29,7 +29,8 @@ stampa una volta sola.
 php tests/prova.php
 ```
 
-59 verifiche, senza dipendenze esterne. Le attese vengono dai due file di esempio
+74 verifiche, senza dipendenze esterne (il file prodotto si rilegge con
+`ZipArchive` e `SimpleXML`, non con la libreria che lo ha scritto). Le attese vengono dai due file di esempio
 del committente: 201 pagine, 1.174 righe cliente, 584 prenotazioni, e le
 intestazioni del tracciato confrontate colonna per colonna con il file vero.
 
@@ -58,7 +59,7 @@ app/
   Database.php             connessione SQLite e schema
   Auth.php                 accesso, sessione, gettone anti-CSRF, freno ai tentativi
   Job.php                  ciclo di vita di una conversione
-  Correzioni.php           riscrittura del foglio dopo le correzioni a mano
+  Errori.php               registro errori e briciole di percorso
   Vista.php                rendering e formattazione
   Conversioni/
     Conversione.php        l'interfaccia che ogni tipologia implementa
@@ -69,7 +70,7 @@ app/
       Parser.php           PDF → righe ospite
       Raggruppatore.php    righe ospite → prenotazioni + anomalie
       Normalizza.php       date, importi, telefoni, agenzie, commenti
-      ScrittoreScidoo.php  prenotazioni → XLSX (o CSV)
+      ScrittoreScidoo.php  prenotazioni → XLSX (o CSV), scritto di getto
 views/                     le nove schermate
 public/css/                design system Broadsheet + stili dell'applicazione
 data/convert.db            database (protetto da .htaccess)
@@ -143,6 +144,37 @@ questi limiti; se restano bassi vanno alzati dal pannello di controllo.
 Se `exec()` è disabilitata (capita sugli hosting condivisi), la conversione gira
 in linea nella stessa richiesta invece che in un processo distaccato: funziona
 lo stesso, ma la pagina di avanzamento resta ferma finché non ha finito.
+
+### Il vincolo che ha dettato l'architettura: ~20 MB
+
+L'hosting **uccide il processo poco sopra i 20 MB di dati**. Non lo fa PHP —
+`memory_limit` dice 512M e `ini_get` lo conferma — lo fa il sistema, e quando
+succede non c'è eccezione, non c'è log, non c'è niente: solo la pagina 500
+statica di Plesk. Misurato allocando a blocchi: il processo muore fra i 18 e i
+20 MB, sempre.
+
+È lo stesso guasto che uccideva `password_hash` con Argon2id (64 MB di memoria
+nativa) e che faceva morire la conversione alla pagina 186 del PDF.
+
+Da qui discendono tre scelte:
+
+1. **Il parser butta via i dati di ogni pagina appena letta.** `getDataTm()` li
+   memorizza in `Page::$dataTm` e il Document tiene tutte le pagine: su 201
+   pagine significa portarsi dietro l'intero documento estratto. Liberarli
+   porta il picco da 26 a 10 MB.
+2. **L'XLSX si scrive a mano, non con PhpSpreadsheet**, che teneva il foglio in
+   memoria e arrivava a 56 MB. Un XLSX è uno zip con dentro qualche XML: si
+   scrive di getto, una riga alla volta su file, a memoria costante. In cambio
+   niente formule né grafici, che questo tracciato non usa. Vantaggio
+   collaterale: `vendor/` è passato da 756 file a 74, e il deploy da 7,4 MB a
+   676 KB.
+3. **L'anteprima non rilegge il file prodotto**: viene costruita durante la
+   conversione, quando le prenotazioni sono già in memoria.
+
+Sul server, oggi: 201 pagine, 1.174 righe, 584 prenotazioni in **1,5 s** con un
+picco di **10 MB**. C'è una verifica in `tests/prova.php` che fallisce se una
+conversione supera i 20 MB: è una regressione che altrimenti si vedrebbe solo in
+produzione, e in silenzio.
 
 ### Una trappola dell'hosting, per chi verrà dopo
 

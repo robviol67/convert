@@ -77,6 +77,7 @@ switch ($pagina) {
         Vista::rendi('diagnostica', [
             'controlli' => Installazione::controlli(),
             'errori'    => Errori::ultimi(10),
+            'passi'     => Errori::passi(),
         ]);
         break;
 
@@ -146,6 +147,9 @@ switch ($pagina) {
             exit;
         }
 
+        Errori::azzeraPassi();
+        Errori::passo('upload · ricevuto', ['byte' => $_FILES['file']['size'] ?? 0]);
+
         $errore = validaUpload($_FILES['file'] ?? null);
         if ($errore === null) {
             $destinazione = Config::cartellaIngresso() . '/' . bin2hex(random_bytes(8)) . '.pdf';
@@ -153,8 +157,10 @@ switch ($pagina) {
                 mkdir(dirname($destinazione), 0770, true);
             }
             move_uploaded_file($_FILES['file']['tmp_name'], $destinazione);
+            Errori::passo('upload · file salvato');
 
             $verifica = $conversione->verifica($destinazione);
+            Errori::passo('upload · riconoscimento fatto', ['pagine' => $verifica['pagine']]);
             if (!$verifica['ok']) {
                 @unlink($destinazione);
                 $errore = $verifica['motivo'];
@@ -187,7 +193,9 @@ switch ($pagina) {
             exit;
         }
         $conversione = Registro::trova($bozza['tipologia']);
+        Errori::passo('regole · inizio analisi');
         $analisi     = $conversione->analizza($bozza['file'], Raggruppatore::REGOLE_DEFAULT);
+        Errori::passo('regole · analisi finita', ['prenotazioni' => $analisi['prenotazioni']]);
         $_SESSION['bozza']['analisi'] = $analisi;
 
         Vista::rendi('regole', [
@@ -292,8 +300,9 @@ switch ($pagina) {
         $utente = Auth::richiedi();
         $job    = jobRichiesto();
         Vista::rendi('rivedere', [
-            'job'      => $job,
-            'anomalie' => Job::anomalie((int) $job['id']),
+            'job'       => $job,
+            'anomalie'  => Job::anomalie((int) $job['id']),
+            'decisioni' => Job::decisioni((int) $job['id']),
         ]);
         break;
 
@@ -301,13 +310,23 @@ switch ($pagina) {
         Auth::richiedi();
         $verificaCsrf();
         $job = jobRichiesto();
-        $pdo = Database::pdo();
-        $agg = $pdo->prepare('UPDATE anomalie SET valore_corretto = ? WHERE id = ? AND job_id = ?');
-        foreach ((array) ($_POST['correzione'] ?? []) as $idAnomalia => $valore) {
-            $agg->execute([trim((string) $valore) !== '' ? trim((string) $valore) : null, (int) $idAnomalia, $job['id']]);
-        }
-        foreach ((array) ($_POST['salta'] ?? []) as $idAnomalia => $_) {
-            $pdo->prepare('UPDATE anomalie SET risolta = 1 WHERE id = ? AND job_id = ?')->execute([(int) $idAnomalia, $job['id']]);
+
+        // Le segnalazioni si identificano per N°pren. e colonna, non per id di
+        // riga: la tabella anomalie si ricostruisce a ogni conversione, e con
+        // essa gli id, mentre la decisione di una persona deve restare valida.
+        $saltate = (array) ($_POST['salta'] ?? []);
+        foreach ((array) ($_POST['correzione'] ?? []) as $riferimento => $valore) {
+            [$chiave, $colonna] = array_pad(explode('|', (string) $riferimento, 2), 2, '');
+            if ($chiave === '' || $colonna === '') {
+                continue;
+            }
+            Job::salvaCorrezione(
+                (int) $job['id'],
+                $chiave,
+                $colonna,
+                (string) $valore,
+                isset($saltate[$riferimento])
+            );
         }
         Job::applicaCorrezioni((int) $job['id']);
         header('Location: ?p=pronto&job=' . $job['riferimento']);
@@ -489,48 +508,20 @@ function preset(int $userId, string $tipologia): array
 }
 
 /**
- * Prime righe del file prodotto, per l'anteprima in 2f. Si legge il file vero:
- * cosi' l'anteprima mostra quello che l'utente scarichera', non una simulazione.
+ * Prime righe del tracciato, per l'anteprima in 2f.
+ *
+ * Si leggono da quello che la conversione ha gia' messo da parte: riaprire
+ * l'XLSX vorrebbe dire ricaricarlo tutto in memoria, e su questo hosting la
+ * memoria e' il vincolo che decide se il lavoro finisce o no.
  *
  * @param array<string,mixed> $job
  * @return array{testate:list<string>,righe:list<list<string>>}
  */
-function anteprimaUscita(array $job, int $quante = 4): array
+function anteprimaUscita(array $job): array
 {
-    if ($job['file_out'] === null || !is_file($job['file_out']) || !str_ends_with($job['file_out'], '.xlsx')) {
-        return ['testate' => [], 'righe' => []];
-    }
+    $salvata = json_decode((string) ($job['anteprima_json'] ?? ''), true);
 
-    $lettore = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($job['file_out']);
-    $lettore->setReadDataOnly(true);
-    $foglio = $lettore->load($job['file_out']);
-    $sh     = $foglio->getSheet(0);
-
-    $colonne = ['B', 'C', 'D', 'E', 'F', 'G', 'I', 'L', 'O', 'P', 'T'];
-    $testate = [];
-    foreach ($colonne as $lettera) {
-        $testate[] = trim((string) $sh->getCell($lettera . '1')->getValue());
-    }
-
-    $righe = [];
-    for ($r = 2; $r < 2 + $quante; $r++) {
-        if ($sh->getCell('B' . $r)->getValue() === null) {
-            break;
-        }
-        $riga = [];
-        foreach ($colonne as $lettera) {
-            $cella  = $sh->getCell($lettera . $r);
-            $valore = $cella->getValue();
-            if ($valore !== null && in_array($lettera, ['E', 'F'], true)) {
-                $valore = Vista::data((float) $valore);
-            } elseif ($valore !== null && $lettera === 'T') {
-                $valore = Vista::valuta((float) $valore);
-            }
-            $riga[] = (string) ($valore ?? '');
-        }
-        $righe[] = $riga;
-    }
-    $foglio->disconnectWorksheets();
-
-    return ['testate' => $testate, 'righe' => $righe];
+    return is_array($salvata) && isset($salvata['testate'], $salvata['righe'])
+        ? $salvata
+        : ['testate' => [], 'righe' => []];
 }

@@ -68,17 +68,19 @@ require $autoload;
 $mancanti = [];
 foreach ([
     'Smalot\\PdfParser\\Parser',
-    'PhpOffice\\PhpSpreadsheet\\Spreadsheet',
-    'PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx',
+    'Vblite\\Convert\\Conversioni\\OctoScidoo\\ScrittoreScidoo',
 ] as $classe) {
     if (!class_exists($classe)) {
         $mancanti[] = $classe;
     }
 }
+if (!class_exists('ZipArchive')) {
+    $mancanti[] = 'ZipArchive (estensione zip di PHP, serve a scrivere l\'XLSX)';
+}
 if ($mancanti !== []) {
     exit("ERRORE: classi non caricate: " . implode(', ', $mancanti) . "\n");
 }
-echo "Autoloader a posto: pdfparser e phpspreadsheet rispondono.\n";
+echo "Autoloader a posto: il lettore PDF e lo scrittore XLSX rispondono.\n";
 
 // Pulizia: prima l'archivio, poi se stesso. Da qui in avanti questo indirizzo
 // deve dare 404.

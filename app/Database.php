@@ -34,12 +34,31 @@ final class Database
 
         self::$pdo = $pdo;
         self::schema($pdo);
+        self::migrazioni($pdo);
 
         if ($nuovo) {
             @chmod($percorso, 0660);
         }
 
         return $pdo;
+    }
+
+    /**
+     * Aggiunte allo schema per i database gia' in esercizio.
+     * CREATE TABLE IF NOT EXISTS non tocca le tabelle esistenti, quindi le
+     * colonne nuove vanno aggiunte a parte. Aggiungere una colonna e' l'unica
+     * cosa che serve finora, e SQLite la fa senza riscrivere la tabella.
+     */
+    private static function migrazioni(PDO $pdo): void
+    {
+        $colonne = [];
+        foreach ($pdo->query('PRAGMA table_info(jobs)') as $riga) {
+            $colonne[] = $riga['name'];
+        }
+
+        if (!in_array('anteprima_json', $colonne, true)) {
+            $pdo->exec('ALTER TABLE jobs ADD COLUMN anteprima_json TEXT');
+        }
     }
 
     private static function schema(PDO $pdo): void
@@ -75,6 +94,7 @@ final class Database
               errore        TEXT,
               versione      INTEGER NOT NULL DEFAULT 1,
               byte_out      INTEGER,
+              anteprima_json TEXT,
               creato_il     TEXT NOT NULL DEFAULT (datetime('now')),
               concluso_il   TEXT
             );
@@ -87,9 +107,21 @@ final class Database
               motivo          TEXT NOT NULL,
               colonna         TEXT NOT NULL,
               gravita         TEXT NOT NULL DEFAULT 'correggi',
-              valore_proposto TEXT,
-              valore_corretto TEXT,
-              risolta         INTEGER NOT NULL DEFAULT 0
+              valore_proposto TEXT
+            );
+
+            -- Le anomalie sono un risultato: si ricalcolano a ogni conversione.
+            -- Le correzioni sono quello che ha deciso una persona, e devono
+            -- sopravvivere alle riconversioni: percio' stanno per conto loro.
+            CREATE TABLE IF NOT EXISTS correzioni (
+              id        INTEGER PRIMARY KEY,
+              job_id    INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+              chiave    TEXT NOT NULL,        -- N°pren.
+              colonna   TEXT NOT NULL,        -- colonna Scidoo
+              valore    TEXT,
+              saltata   INTEGER NOT NULL DEFAULT 0,
+              creato_il TEXT NOT NULL DEFAULT (datetime('now')),
+              UNIQUE (job_id, chiave, colonna)
             );
 
             CREATE TABLE IF NOT EXISTS preset (
