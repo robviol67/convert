@@ -8,6 +8,10 @@
  * quasi sempre il punto di partenza giusto, e chi deve solo aggiungere un
  * codice non deve rimappare venti colonne a mano.
  *
+ * Sta tutto in un riquadro che scorre, con un filtro sopra: un CSV di
+ * gestionale porta quaranta colonne, e quaranta blocchi di controlli in fila
+ * sono una pagina in cui non si trova più niente.
+ *
  * @var array<string,mixed> $analisi
  */
 use Vblite\Convert\Conversioni\Tabelle\ConversioneTabelle;
@@ -29,28 +33,34 @@ $tipi = [
      data-fisso="<?= Vista::e(ConversioneTabelle::FISSO) ?>"
      data-vuoto="<?= Vista::e(ConversioneTabelle::VUOTO) ?>">
 
-  <div class="tra" style="margin-bottom:var(--space-3)">
+  <div class="tra" style="margin-bottom:var(--space-2);gap:var(--space-3);align-items:center">
     <p class="kick" style="margin:0">Colonne in uscita</p>
-    <span class="mono muted" style="font-size:12.5px" id="conta-colonne"></span>
+    <span style="display:flex;gap:var(--space-3);align-items:center">
+      <input class="input" id="filtro-mappatura" type="search" placeholder="Filtra…"
+             style="padding:3px 8px;font-size:12.5px;width:150px" autocomplete="off">
+      <span class="mono muted" style="font-size:12.5px" id="conta-colonne"></span>
+    </span>
   </div>
 
-  <div class="mrow hd" style="grid-template-columns:1.1fr 1.1fr 130px 28px">
-    <span class="kick">Come si chiamerà</span>
-    <span class="kick">Da dove viene</span>
-    <span class="kick">Tipo</span>
-    <span></span>
+  <div class="mappa" id="riquadro-mappatura">
+    <div class="mrow hd">
+      <span class="kick">Come si chiamerà</span>
+      <span class="kick">Da dove viene</span>
+      <span class="kick cella-valore" hidden>Valore</span>
+      <span class="kick">Tipo</span>
+      <span></span>
+    </div>
+    <div id="righe-mappatura"></div>
   </div>
 
-  <div id="righe-mappatura"></div>
-
-  <div style="display:flex;gap:var(--space-2);margin-top:var(--space-3)">
+  <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2);flex-wrap:wrap">
     <button type="button" class="btn btn-secondary" id="aggiungi-fissa">+ Colonna a valore fisso</button>
     <button type="button" class="btn btn-ghost" id="ripristina">Ricomincia dalle colonne del file</button>
   </div>
 
   <?php if ($assaggio !== []): ?>
-    <div style="margin-top:var(--space-6)">
-      <p class="kick" style="margin:0 0 var(--space-3)">Le prime righe del file caricato</p>
+    <div style="margin-top:var(--space-4)">
+      <p class="kick" style="margin:0 0 var(--space-2)">Le prime righe del file caricato</p>
       <div class="foglio" style="overflow-x:auto">
         <table class="table" style="width:100%;font-size:12.5px;white-space:nowrap">
           <thead><tr>
@@ -86,8 +96,10 @@ $tipi = [
   var tipi    = JSON.parse(radice.getAttribute('data-tipi') || '{}');
   var FISSO   = radice.getAttribute('data-fisso');
   var VUOTO   = radice.getAttribute('data-vuoto');
+  var riquadro    = document.getElementById('riquadro-mappatura');
   var contenitore = document.getElementById('righe-mappatura');
   var conta       = document.getElementById('conta-colonne');
+  var filtro      = document.getElementById('filtro-mappatura');
 
   function identita() {
     return colonne.map(function (nome) {
@@ -115,6 +127,14 @@ $tipi = [
   }
 
   function disegna() {
+    /* La colonna del valore fisso compare solo se serve davvero: senza, sarebbe
+       una striscia vuota per tutta la lunghezza dell'elenco. */
+    var conValore = mappa.some(function (c) { return c.da === FISSO; });
+    riquadro.classList.toggle('con-valore', conValore);
+    Array.prototype.forEach.call(riquadro.querySelectorAll('.cella-valore'), function (c) {
+      c.hidden = !conValore;
+    });
+
     var html = '';
     mappa.forEach(function (c, i) {
       var tipiHtml = '';
@@ -122,28 +142,45 @@ $tipi = [
         tipiHtml += '<option value="' + k + '"' + (k === c.tipo ? ' selected' : '') + '>' + esc(tipi[k]) + '</option>';
       });
 
-      html += '<div class="mrow" style="grid-template-columns:1.1fr 1.1fr 130px 28px" data-i="' + i + '">'
-        + '<span><input class="input" style="padding:5px 8px;font-size:13px;width:100%" '
-        +   'name="colonne[' + i + '][nome]" value="' + esc(c.nome) + '" maxlength="120"></span>'
-        + '<span>'
-        +   '<select class="input" style="padding:5px 8px;font-size:13px;width:100%" name="colonne[' + i + '][da]">'
-        +     opzioni(c.da) + '</select>'
-        +   (c.da === FISSO
-              ? '<input class="input" style="padding:5px 8px;font-size:13px;width:100%;margin-top:4px" '
-                + 'name="colonne[' + i + '][valore]" value="' + esc(c.valore) + '" maxlength="200" '
-                + 'placeholder="valore uguale per tutte le righe">'
-              : '<input type="hidden" name="colonne[' + i + '][valore]" value="' + esc(c.valore) + '">')
-        + '</span>'
-        + '<span><select class="input" style="padding:5px 8px;font-size:13px;width:100%" '
-        +   'name="colonne[' + i + '][tipo]">' + tipiHtml + '</select></span>'
-        + '<span><button type="button" class="btn btn-ghost togli" style="padding:2px 7px;font-size:15px" '
-        +   'title="Togli questa colonna">&times;</button></span>'
+      var nascosto = '<input type="hidden" name="colonne[' + i + '][valore]" value="' + esc(c.valore) + '">';
+
+      html += '<div class="mrow" data-i="' + i + '" data-cerca="'
+        +   esc((c.nome + ' ' + c.da).toLowerCase()) + '">'
+        + '<span><input class="input" name="colonne[' + i + '][nome]" value="' + esc(c.nome) + '" '
+        +   'maxlength="120">' + (conValore ? '' : nascosto) + '</span>'
+        + '<span><select class="input" name="colonne[' + i + '][da]">' + opzioni(c.da) + '</select></span>'
+        + (conValore
+            ? '<span class="cella-valore">'
+              + (c.da === FISSO
+                  ? '<input class="input" name="colonne[' + i + '][valore]" value="' + esc(c.valore) + '" '
+                    + 'maxlength="200" placeholder="uguale per tutte le righe">'
+                  : nascosto)
+              + '</span>'
+            : '')
+        + '<span><select class="input" name="colonne[' + i + '][tipo]">' + tipiHtml + '</select></span>'
+        + '<span><button type="button" class="btn btn-ghost togli" title="Togli questa colonna">&times;</button></span>'
         + '</div>';
     });
 
-    contenitore.innerHTML = html;
+    contenitore.innerHTML = html || '<p class="niente">Nessuna colonna in uscita: il file sarebbe vuoto.</p>';
     conta.textContent = mappa.length + (mappa.length === 1 ? ' colonna' : ' colonne')
       + ' · ' + colonne.length + ' nel file';
+    setaccia();
+  }
+
+  /* Il filtro nasconde, non toglie: i campi restano nel modulo, così una riga
+     fuori vista continua a essere inviata e a essere riletta da raccogli(). */
+  function setaccia() {
+    var cerca = (filtro.value || '').trim().toLowerCase();
+    var viste = 0;
+    Array.prototype.forEach.call(contenitore.querySelectorAll('.mrow'), function (riga) {
+      var ok = cerca === '' || riga.getAttribute('data-cerca').indexOf(cerca) !== -1;
+      riga.style.display = ok ? '' : 'none';
+      if (ok) { viste++; }
+    });
+    if (cerca !== '') {
+      conta.textContent = viste + ' su ' + mappa.length;
+    }
   }
 
   /* Si rilegge lo stato dai campi prima di ridisegnare: altrimenti una modifica
@@ -176,16 +213,20 @@ $tipi = [
     disegna();
   });
 
+  filtro.addEventListener('input', setaccia);
+
   document.getElementById('aggiungi-fissa').addEventListener('click', function () {
     raccogli();
     mappa.push({ nome: 'Nuova colonna', da: FISSO, valore: '', tipo: 'testo' });
+    filtro.value = '';
     disegna();
     var ultima = contenitore.querySelector('.mrow:last-child input');
-    if (ultima) { ultima.focus(); ultima.select(); }
+    if (ultima) { ultima.focus(); ultima.select(); ultima.scrollIntoView({ block: 'nearest' }); }
   });
 
   document.getElementById('ripristina').addEventListener('click', function () {
     mappa = identita();
+    filtro.value = '';
     disegna();
   });
 

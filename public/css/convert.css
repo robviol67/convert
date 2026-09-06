@@ -110,6 +110,30 @@ body.trascina .sh > *:not(.body), body.trascina .body > *:not(.wizard) { opacity
   padding: 8px 0; border-bottom: 1px solid var(--color-divider); font-size: 13.5px;
 }
 .mrow.hd { border-bottom: 1px solid var(--color-text); padding-bottom: 6px; }
+
+/* ── mappatura delle colonne ──────────────────────────────────────────
+   Un CSV di gestionale ne ha quaranta, e quaranta blocchi di controlli
+   sono una pagina che non finisce mai. Righe strette, tutto su una riga
+   sola, e l'elenco dentro un riquadro che scorre per conto suo: così la
+   mappatura occupa uno schermo qualunque sia il numero di colonne. */
+.mappa {
+  border: 1px solid var(--color-divider); background: #fff;
+  max-height: 52vh; overflow-y: auto;
+}
+.mappa .mrow {
+  grid-template-columns: 1fr 1fr 104px 24px;
+  gap: var(--space-2); align-items: center;
+  padding: 2px var(--space-3); font-size: 12.5px;
+}
+.mappa.con-valore .mrow { grid-template-columns: 1fr 1fr 1fr 104px 24px; }
+.mappa .mrow.hd {
+  position: sticky; top: 0; z-index: 1; background: var(--color-neutral-100);
+  padding-top: 6px; padding-bottom: 5px;
+}
+.mappa .mrow:last-child { border-bottom: none; }
+.mappa .input { width: 100%; padding: 3px 6px; font-size: 12.5px; }
+.mappa .togli { padding: 0 5px; font-size: 15px; line-height: 1.4; }
+.mappa .niente { padding: var(--space-4); text-align: center; color: var(--color-neutral-600); }
 .arw { color: var(--color-accent); text-align: center; }
 .arw.scarto { color: var(--color-accent-2-700); }
 
