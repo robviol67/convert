@@ -111,6 +111,16 @@ body.trascina .sh > *:not(.body), body.trascina .body > *:not(.wizard) { opacity
 }
 .mrow.hd { border-bottom: 1px solid var(--color-text); padding-bottom: 6px; }
 
+/* ── lo step 2: regole a sinistra, opzioni a destra ───────────────────
+   Il min-width serve, e non è pignoleria: una colonna di griglia parte con
+   min-width:auto, cioè si rifiuta di scendere sotto la larghezza minima del
+   suo contenuto. Basta una tabella di quaranta colonne senza a capo e la
+   colonna «1fr» si gonfia fino a quella misura portandosi dietro l'intera
+   pagina — la mappatura finiva spalmata su tremila pixel, con una colonna
+   sola dentro la finestra e tutto il resto fuori a destra. */
+.due-colonne { display: grid; grid-template-columns: 1fr 400px; gap: var(--space-8); }
+.due-colonne > * { min-width: 0; }
+
 /* ── mappatura delle colonne ──────────────────────────────────────────
    Un CSV di gestionale ne ha quaranta, e quaranta blocchi di controlli
    sono una pagina che non finisce mai. Righe strette, tutto su una riga
@@ -118,7 +128,7 @@ body.trascina .sh > *:not(.body), body.trascina .body > *:not(.wizard) { opacity
    mappatura occupa uno schermo qualunque sia il numero di colonne. */
 .mappa {
   border: 1px solid var(--color-divider); background: #fff;
-  max-height: 52vh; overflow-y: auto;
+  max-width: 100%; max-height: 52vh; overflow-y: auto;
 }
 .mappa .mrow {
   grid-template-columns: 1fr 1fr 104px 24px;

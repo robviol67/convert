@@ -38,9 +38,9 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
     <a class="btn btn-ghost" href="?p=carica&amp;t=<?= Vista::e($bozza['tipologia']) ?>">Cambia file</a>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 400px;gap:var(--space-8);margin-top:var(--space-6)">
+  <div class="due-colonne" style="margin-top:var(--space-6)">
 
-    <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+    <div style="display:flex;flex-direction:column;gap:var(--space-4);min-width:0">
       <div<?= !empty($manifest['ha_mappatura']) ? ' hidden' : '' ?>>
         <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($manifest['titolo_regole'] ?? 'Regole di conversione') ?></p>
         <div class="mrow hd"><span class="kick"><?= Vista::e($manifest['colonna_da'] ?? 'Da') ?></span><span></span><span class="kick"><?= Vista::e($manifest['colonna_a'] ?? 'A') ?></span><span class="kick">Regola</span></div>
