@@ -348,7 +348,39 @@ switch ($pagina) {
             'filtro'  => $filtro,
             'jobs'    => Job::storico($utente['id'], $filtro),
             'totali'  => totaliArchivio(),
+            'avviso'  => $_SESSION['avviso'] ?? null,
         ]);
+        unset($_SESSION['avviso']);
+        break;
+
+    case 'elimina':
+        Auth::richiedi();
+        $verificaCsrf();
+        $job   = jobRichiesto();
+        $tolti = Job::elimina((int) $job['id']);
+        $_SESSION['avviso'] = sprintf(
+            'Eliminata «%s»%s.',
+            $job['nome_originale'],
+            $tolti['file'] > 0
+                ? ' — liberati ' . Vista::byte($tolti['byte'])
+                : ' — i file non c\'erano più'
+        );
+        header('Location: ?p=storico&f=' . urlencode((string) ($_POST['f'] ?? 'tutte')));
+        break;
+
+    case 'svuota_storico':
+        Auth::richiedi();
+        $verificaCsrf();
+        $tolti = Job::svuota();
+        $_SESSION['avviso'] = $tolti['conversioni'] === 0
+            ? 'Lo storico era già vuoto.'
+            : sprintf(
+                'Storico svuotato: %s conversioni, %s file, %s liberati.',
+                Vista::numero($tolti['conversioni']),
+                Vista::numero($tolti['file']),
+                Vista::byte($tolti['byte'])
+            );
+        header('Location: ?p=storico');
         break;
 
     case 'rifai':

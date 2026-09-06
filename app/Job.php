@@ -333,6 +333,95 @@ final class Job
         return $stmt->fetchAll();
     }
 
+    /**
+     * Cancella una conversione: la riga e i suoi file.
+     *
+     * Il file d'ingresso può essere condiviso. «Rifai» non ricarica niente:
+     * crea una conversione nuova che punta allo stesso PDF. Cancellare la
+     * riconversione portandosi via il file toglierebbe il «Rifai» anche a
+     * quella originale, quindi il file d'ingresso si tocca solo quando non lo
+     * usa più nessuno. Il file d'uscita invece è di questa conversione sola.
+     *
+     * Si cancella soltanto dentro le cartelle dell'archivio: un percorso
+     * manomesso nel database non deve poter portare via nient'altro.
+     *
+     * @return array{file:int,byte:int}
+     */
+    public static function elimina(int $id): array
+    {
+        $job = self::trova($id);
+        if ($job === null) {
+            return ['file' => 0, 'byte' => 0];
+        }
+
+        $pdo = Database::pdo();
+        // Le figlie le porterebbe via la cascata delle chiavi esterne, ma la
+        // cascata dipende da un pragma acceso a ogni connessione: due righe
+        // esplicite costano niente e non lasciano orfani se il pragma manca.
+        $pdo->beginTransaction();
+        foreach (['anomalie', 'correzioni'] as $tabella) {
+            $pdo->prepare("DELETE FROM {$tabella} WHERE job_id = ?")->execute([$id]);
+        }
+        $pdo->prepare('DELETE FROM jobs WHERE id = ?')->execute([$id]);
+        $pdo->commit();
+
+        $tolti = ['file' => 0, 'byte' => 0];
+        $togli = static function (?string $percorso, string $cartella) use (&$tolti): void {
+            if ($percorso === null || $percorso === '' || !is_file($percorso)) {
+                return;
+            }
+            $vero   = realpath($percorso);
+            $dentro = realpath($cartella);
+            if ($vero === false || $dentro === false
+                || !str_starts_with($vero, rtrim($dentro, '/') . '/')) {
+                return;
+            }
+            $byte = (int) @filesize($vero);
+            if (@unlink($vero)) {
+                $tolti['file']++;
+                $tolti['byte'] += $byte;
+            }
+        };
+
+        $togli($job['file_out'], Config::cartellaUscita());
+
+        $altre = $pdo->prepare('SELECT COUNT(*) FROM jobs WHERE file_in = ?');
+        $altre->execute([$job['file_in']]);
+        if ((int) $altre->fetchColumn() === 0) {
+            $togli($job['file_in'], Config::cartellaIngresso());
+        }
+
+        return $tolti;
+    }
+
+    /**
+     * Svuota lo storico. Con $userId, solo le conversioni di quella persona.
+     *
+     * Passa da elimina() una per una invece di un DELETE solo: è il modo di
+     * non sbagliare sui file condivisi, e qui la lentezza non conta — sono
+     * centinaia di righe, non milioni.
+     *
+     * @return array{conversioni:int,file:int,byte:int}
+     */
+    public static function svuota(?int $userId = null): array
+    {
+        $stmt = Database::pdo()->prepare(
+            'SELECT id FROM jobs' . ($userId !== null ? ' WHERE user_id = ?' : '')
+        );
+        $stmt->execute($userId !== null ? [$userId] : []);
+        $ids = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        $totale = ['conversioni' => 0, 'file' => 0, 'byte' => 0];
+        foreach ($ids as $id) {
+            $tolti = self::elimina((int) $id);
+            $totale['conversioni']++;
+            $totale['file'] += $tolti['file'];
+            $totale['byte'] += $tolti['byte'];
+        }
+
+        return $totale;
+    }
+
     private static function fallisci(int $jobId, string $errore): void
     {
         Database::pdo()

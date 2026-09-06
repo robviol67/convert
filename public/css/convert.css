@@ -111,6 +111,12 @@ body.trascina .sh > *:not(.body), body.trascina .body > *:not(.wizard) { opacity
 }
 .mrow.hd { border-bottom: 1px solid var(--color-text); padding-bottom: 6px; }
 
+/* Cancellare è l'unica cosa irreversibile qui dentro: il pulsante lo dice
+   col colore, senza gridare — resta un pulsante di testo come gli altri. */
+.btn-rischio { color: var(--color-accent-2-700); padding-inline: var(--space-1); }
+.btn-rischio:hover { background: color-mix(in srgb, var(--color-accent-2) 12%, transparent); }
+.btn-rischio:active { background: color-mix(in srgb, var(--color-accent-2) 20%, transparent); }
+
 /* ── lo step 2: regole a sinistra, opzioni a destra ───────────────────
    Il min-width serve, e non è pignoleria: una colonna di griglia parte con
    min-width:auto, cioè si rifiuta di scendere sotto la larghezza minima del

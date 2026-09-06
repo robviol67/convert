@@ -1,7 +1,12 @@
 <?php
 /**
  * 2h — Storico. I file non scadono: restano finche' non si cancellano.
+ *
+ * Cancellare e' l'unica cosa irreversibile di tutta l'applicazione, percio'
+ * i due pulsanti dicono per esteso cosa portano via prima di farlo.
+ *
  * @var list<array<string,mixed>> $jobs
+ * @var string|null $avviso
  */
 use Vblite\Convert\Auth;
 use Vblite\Convert\Vista;
@@ -42,7 +47,20 @@ if ($cerca !== '') {
     <span class="mono" style="color:rgba(32,30,29,.45);margin-left:auto">
       <?= Vista::numero($totali['conversioni']) ?> conversioni · <?= Vista::e(Vista::byte($totali['byte'])) ?> archiviati
     </span>
+    <?php if ($totali['conversioni'] > 0): ?>
+      <form method="post" action="?p=svuota_storico" onsubmit="return confirm(
+        'Elimino tutto lo storico: <?= Vista::numero($totali['conversioni']) ?> conversioni di tutti gli utenti, '
+        + 'con i file caricati e quelli prodotti (<?= Vista::e(Vista::byte($totali['byte'])) ?>).\n\n'
+        + 'Non si torna indietro.')">
+        <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
+        <button class="btn btn-rischio" style="padding:4px 10px;font-size:13px" type="submit">Svuota lo storico</button>
+      </form>
+    <?php endif; ?>
   </div>
+
+  <?php if (($avviso ?? null) !== null): ?>
+    <p class="avviso buono" style="margin:var(--space-4) 0 0"><?= Vista::e($avviso) ?></p>
+  <?php endif; ?>
 
   <div style="margin-top:var(--space-4)">
     <?php if ($jobs === []): ?>
@@ -56,7 +74,7 @@ if ($cerca !== '') {
           <th style="width:100px;text-align:right">Pren.</th>
           <th style="width:140px">Esito</th>
           <th style="width:120px">Quando</th>
-          <th style="width:190px"></th>
+          <th style="width:230px"></th>
         </tr></thead>
         <tbody>
         <?php foreach ($jobs as $i => $job): ?>
@@ -79,6 +97,13 @@ if ($cerca !== '') {
                   </button>
                 </form>
               <?php endif; ?>
+              <form method="post" action="?p=elimina&amp;job=<?= Vista::e($job['riferimento']) ?>" style="display:inline"
+                    onsubmit="return confirm('Elimino «<?= Vista::e(addslashes($job['nome_originale'])) ?>» e i suoi file.\n\nNon si torna indietro.')">
+                <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
+                <input type="hidden" name="f" value="<?= Vista::e($filtro) ?>">
+                <button class="btn btn-rischio" style="padding:4px 8px;font-size:13px" type="submit"
+                        title="Elimina questa conversione e i suoi file">Elimina</button>
+              </form>
             </td>
           </tr>
         <?php endforeach; ?>
@@ -88,7 +113,7 @@ if ($cerca !== '') {
   </div>
 
   <div class="foot">
-    <span class="mono" style="color:rgba(32,30,29,.5)">Nessuna scadenza: i file restano finché non li cancelli</span>
+    <span class="mono" style="color:rgba(32,30,29,.5)">Nessuna scadenza: i file restano finché non li elimini</span>
     <a href="?p=home" style="font-size:14px">Torna alle tipologie</a>
   </div>
 </div>
