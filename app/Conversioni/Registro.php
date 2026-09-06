@@ -5,6 +5,7 @@ namespace Vblite\Convert\Conversioni;
 
 use Vblite\Convert\Conversioni\Documenti\ConversioneDocumenti;
 use Vblite\Convert\Conversioni\OctoScidoo\ConversioneOctoScidoo;
+use Vblite\Convert\Conversioni\PdfTabella\ConversionePdfTabella;
 use Vblite\Convert\Conversioni\Tabelle\ConversioneTabelle;
 
 /**
@@ -19,6 +20,7 @@ final class Registro
         ConversioneOctoScidoo::class,
         ConversioneDocumenti::class,
         ConversioneTabelle::class,
+        ConversionePdfTabella::class,
     ];
 
     /**
