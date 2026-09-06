@@ -505,6 +505,24 @@ function regoleDaPost(array $post, array $manifest): array
         $regole[$campo['chiave']] = mb_substr(trim((string) ($post['campi'][$campo['chiave']] ?? '')), 0, 200);
     }
 
+    // La mappatura delle colonne, per le tipologie che la usano. Si accetta
+    // così com'è e si ripulisce dentro la conversione, che è l'unica a sapere
+    // quali colonne il file d'origine abbia davvero.
+    if (!empty($manifest['ha_mappatura']) && is_array($post['colonne'] ?? null)) {
+        $colonne = [];
+        foreach ($post['colonne'] as $colonna) {
+            if (is_array($colonna) && trim((string) ($colonna['nome'] ?? '')) !== '') {
+                $colonne[] = [
+                    'nome'   => (string) $colonna['nome'],
+                    'da'     => (string) ($colonna['da'] ?? ''),
+                    'valore' => (string) ($colonna['valore'] ?? ''),
+                    'tipo'   => (string) ($colonna['tipo'] ?? 'testo'),
+                ];
+            }
+        }
+        $regole['colonne'] = $colonne;
+    }
+
     // Scelte a elenco: solo un valore fra quelli dichiarati.
     foreach ($manifest['scelte'] ?? [] as $scelta) {
         $valore = (string) ($post['scelte'][$scelta['chiave']] ?? '');

@@ -41,7 +41,7 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
   <div style="display:grid;grid-template-columns:1fr 400px;gap:var(--space-8);margin-top:var(--space-6)">
 
     <div style="display:flex;flex-direction:column;gap:var(--space-4)">
-      <div>
+      <div<?= !empty($manifest['ha_mappatura']) ? ' hidden' : '' ?>>
         <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($manifest['titolo_regole'] ?? 'Regole di conversione') ?></p>
         <div class="mrow hd"><span class="kick"><?= Vista::e($manifest['colonna_da'] ?? 'Da') ?></span><span></span><span class="kick"><?= Vista::e($manifest['colonna_a'] ?? 'A') ?></span><span class="kick">Regola</span></div>
         <?php foreach ($manifest['regole_conversione'] as $regola): ?>
@@ -58,6 +58,10 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
           </div>
         <?php endforeach; ?>
       </div>
+
+      <?php if (!empty($manifest['ha_mappatura'])): ?>
+        <?php require __DIR__ . '/parti/mappatura.php'; ?>
+      <?php endif; ?>
 
       <?php // L'unico blocco che sa di prenotazioni: compare solo se la tipologia
             // produce un'anteprima del raggruppamento, cioè oggi solo Octo → Scidoo.
@@ -178,16 +182,19 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
         </div>
       <?php endif; ?>
 
+      <?php // Un'impostazione di una tipologia sola: compare dove la dichiara. ?>
+      <?php if (($manifest['sorgenti_camera'] ?? []) !== []): ?>
       <div>
         <p class="kick" style="margin:0 0 var(--space-3)">Numero camera</p>
         <select class="input" name="sorgente_camera" style="padding:7px 9px;font-size:14px">
           <?php foreach ($manifest['sorgenti_camera'] as $valore => $etichetta): ?>
-            <option value="<?= Vista::e($valore) ?>" <?= $valore === $default['sorgente_camera'] ? 'selected' : '' ?>>
+            <option value="<?= Vista::e($valore) ?>" <?= $valore === array_key_first($manifest['sorgenti_camera']) ? 'selected' : '' ?>>
               <?= Vista::e($etichetta) ?>
             </option>
           <?php endforeach; ?>
         </select>
       </div>
+      <?php endif; ?>
     </div>
   </div>
 

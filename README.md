@@ -5,8 +5,10 @@ Due tipologie:
 
 - **Octo → Scidoo** — dalla stampa prenotazioni di Octorate (PDF) al
   *File Import Prenotazioni* di Scidoo (XLSX).
-- **Documenti ↔ Markdown** — Word `.docx`, PDF, RTF e testo semplice verso
-  Markdown, e ritorno.
+- **Documenti ↔ Markdown** — Word `.docx`, EPUB, PDF, RTF, HTML e testo
+  semplice verso Markdown, e ritorno.
+- **Tabella → Tabella** — CSV e XLSX con mappatura delle colonne, comprese
+  colonne a valore fisso.
 
 Architettura scelta: **PHP 8 + SQLite** (opzione A del documento di consegna),
 con la logica di conversione isolata dietro l'interfaccia `Conversione`, così che
@@ -33,10 +35,11 @@ stampa una volta sola.
 bash bin/verifica.sh
 ```
 
-121 verifiche in due suite — `tests/prova.php` per Octo → Scidoo,
-`tests/documenti.php` per i documenti — senza dipendenze esterne: ogni file
-prodotto si rilegge con gli strumenti di PHP, non con la libreria che lo ha
-scritto. Un validatore che condivide il codice dello scrittore prova poco. Le attese vengono dai due file di esempio
+201 verifiche in tre suite — `tests/prova.php` per Octo → Scidoo,
+`tests/documenti.php` per i documenti, `tests/tabelle.php` per le tabelle —
+senza dipendenze esterne: ogni file prodotto si rilegge con gli strumenti di
+PHP, non con la libreria che lo ha scritto. Un validatore che condivide il
+codice dello scrittore prova poco. Le attese vengono dai due file di esempio
 del committente: 201 pagine, 1.174 righe cliente, 584 prenotazioni, e le
 intestazioni del tracciato confrontate colonna per colonna con il file vero.
 
@@ -127,6 +130,34 @@ formato, e l'applicazione lo dice.
 - **PDF fatti di scansioni**: senza riconoscimento ottico non c'è testo.
 - **Impaginazione**: colonne, cornici, testo attorno alle figure.
 - **Note a piè di pagina, revisioni, commenti, campi calcolati.**
+
+## Tabella → Tabella
+
+La generalizzazione di Octo → Scidoo: là le regole stavano nel codice perché il
+tracciato era uno solo, qui le sceglie chi converte. Ogni colonna in uscita può
+venire da una colonna del file, da un **valore fisso** uguale per tutte le
+righe, o restare vuota; si rinomina, si riordina, si scarta. La mappatura si
+salva come preset.
+
+Il valore fisso è la parte che i convertitori non hanno quasi mai e che serve
+sempre: un codice fornitore, un tag di campagna, una data di importazione.
+
+Tre trappole dei fogli di calcolo, tutte con una verifica:
+
+- **Le date sono numeri.** In XLSX una data è il numero dei giorni dal 1899. Si
+  riconosce dal formato della cella — leggendo `styles.xml`, non indovinando —
+  e si riscrive leggibile.
+- **Le celle vuote non ci sono.** XLSX le salta invece di scriverle: senza
+  guardare il riferimento (`A1`, `C1`…) una riga con un buco slitterebbe di una
+  colonna. E una cella vuota autochiusa `<c r="A3"/>` si mangia il contenuto
+  della successiva, se la regex che legge gli attributi è avida.
+- **Il separatore del CSV si indovina** dalla prima riga. In Italia è quasi
+  sempre il punto e virgola, perché la virgola è già il separatore decimale.
+
+Sul server: 5.000 righe in 0,4 s con 2 MB di picco; 20.000 righe restano sotto
+i 20 MB. `app/Supporto/FoglioXlsx.php` è lo scrittore XLSX condiviso con
+Octo → Scidoo — estratto quando è servito un secondo foglio, perché tenerne due
+copie avrebbe voluto dire correggere due volte gli stessi errori.
 
 ### Aggiungere una tipologia di conversione
 

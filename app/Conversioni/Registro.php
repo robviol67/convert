@@ -5,6 +5,7 @@ namespace Vblite\Convert\Conversioni;
 
 use Vblite\Convert\Conversioni\Documenti\ConversioneDocumenti;
 use Vblite\Convert\Conversioni\OctoScidoo\ConversioneOctoScidoo;
+use Vblite\Convert\Conversioni\Tabelle\ConversioneTabelle;
 
 /**
  * Registro delle tipologie di conversione.
@@ -17,6 +18,7 @@ final class Registro
     private const CLASSI = [
         ConversioneOctoScidoo::class,
         ConversioneDocumenti::class,
+        ConversioneTabelle::class,
     ];
 
     /**
@@ -25,9 +27,7 @@ final class Registro
      *
      * @var list<array{titolo:string,sottotitolo:string}>
      */
-    private const IN_ARRIVO = [
-        ['titolo' => 'In arrivo', 'sottotitolo' => 'Proponi un tracciato da convertire'],
-    ];
+    private const IN_ARRIVO = [];
 
     /** @return list<Conversione> */
     public static function tutte(): array
