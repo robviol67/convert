@@ -41,7 +41,36 @@ require __DIR__ . '/parti/passi.php';
             <button class="btn btn-primary" type="button" id="scegli">Scegli un file</button>
           </div>
         </div>
+
+        <?php // Chi ha copiato la trascrizione dal pannello di un video non ha
+              // nessun file da trascinare: il testo e' gia' negli appunti. ?>
+        <?php if (!empty($manifest['accetta_incolla'])): ?>
+          <div style="margin-top:var(--space-4)">
+            <p class="kick" style="margin:0 0 var(--space-2)">Oppure incolla il testo</p>
+            <textarea class="input" name="testo" id="testo" rows="6" spellcheck="false"
+                      style="width:100%;font-size:13.5px;line-height:1.5;resize:vertical"
+                      placeholder="Incolla qui la trascrizione copiata dal video, coi tempi o senza."></textarea>
+            <button class="btn btn-secondary" type="submit" id="converti-incollato"
+                    style="margin-top:var(--space-2)" disabled>Usa il testo incollato</button>
+          </div>
+        <?php endif; ?>
       </form>
+
+      <?php if (!empty($manifest['accetta_incolla'])): ?>
+        <script>
+        /* Il pulsante resta spento finche' non c'e' qualcosa da mandare: un
+           modulo vuoto tornerebbe indietro con un errore, e l'errore si evita
+           prima di prenderlo. */
+        (function () {
+          var testo = document.getElementById('testo');
+          var invia = document.getElementById('converti-incollato');
+          if (!testo || !invia) { return; }
+          testo.addEventListener('input', function () {
+            invia.disabled = testo.value.trim() === '';
+          });
+        })();
+        </script>
+      <?php endif; ?>
 
       <div style="margin-top:var(--space-6)">
         <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($manifest['titolo_eccezioni'] ?? 'Cosa sapere') ?></p>

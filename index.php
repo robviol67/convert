@@ -150,7 +150,49 @@ switch ($pagina) {
         Errori::passo('upload · ricevuto', ['byte' => $_FILES['file']['size'] ?? 0]);
 
         $manifest = $conversione->manifest();
-        $errore   = validaUpload($_FILES['file'] ?? null, $manifest['estensioni_ingresso'] ?? []);
+
+        // Il testo incollato prende la strada del file: si salva in un .txt e
+        // da lì in poi non c'e' piu' niente di diverso. Cosi' la conversione,
+        // il rifai e lo storico non sanno nemmeno che e' stato incollato.
+        $incollato = !empty($manifest['accetta_incolla']) ? trim((string) ($_POST['testo'] ?? '')) : '';
+        $daFile    = ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+        if (!$daFile && $incollato !== '') {
+            $massimo = (int) ($manifest['max_incolla'] ?? 2_000_000);
+            $errore   = strlen($incollato) > $massimo
+                ? 'Il testo incollato e\' troppo lungo: il massimo e\' '
+                    . round($massimo / 1048576, 1) . ' MB.'
+                : null;
+            if ($errore === null) {
+                $destinazione = Config::cartellaIngresso() . '/' . bin2hex(random_bytes(8)) . '.txt';
+                if (!is_dir(dirname($destinazione))) {
+                    mkdir(dirname($destinazione), 0770, true);
+                }
+                file_put_contents($destinazione, $incollato);
+                Errori::passo('upload · testo incollato salvato', ['byte' => strlen($incollato)]);
+
+                $verifica = $conversione->verifica($destinazione);
+                if (!$verifica['ok']) {
+                    @unlink($destinazione);
+                    $errore = $verifica['motivo'];
+                } else {
+                    $_SESSION['bozza'] = [
+                        'tipologia'      => $chiave,
+                        'file'           => $destinazione,
+                        'nome_originale' => 'trascrizione incollata.txt',
+                        'byte'           => strlen($incollato),
+                        'verifica'       => $verifica,
+                    ];
+                    header('Location: ?p=regole');
+                    exit;
+                }
+            }
+            $_SESSION['errore_upload'] = $errore;
+            header('Location: ?p=carica&t=' . urlencode($chiave));
+            break;
+        }
+
+        $errore = validaUpload($_FILES['file'] ?? null, $manifest['estensioni_ingresso'] ?? []);
         if ($errore === null) {
             // L'estensione si conserva: e' con quella che il lettore giusto
             // viene scelto quando la conversione parte.

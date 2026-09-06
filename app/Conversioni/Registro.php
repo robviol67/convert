@@ -7,6 +7,7 @@ use Vblite\Convert\Conversioni\Documenti\ConversioneDocumenti;
 use Vblite\Convert\Conversioni\OctoScidoo\ConversioneOctoScidoo;
 use Vblite\Convert\Conversioni\PdfTabella\ConversionePdfTabella;
 use Vblite\Convert\Conversioni\Tabelle\ConversioneTabelle;
+use Vblite\Convert\Conversioni\Trascrizioni\ConversioneTrascrizione;
 
 /**
  * Registro delle tipologie di conversione.
@@ -21,6 +22,7 @@ final class Registro
         ConversioneDocumenti::class,
         ConversioneTabelle::class,
         ConversionePdfTabella::class,
+        ConversioneTrascrizione::class,
     ];
 
     /**
