@@ -93,5 +93,23 @@ return [
         ],
     ],
     'invito_upload'       => 'Trascina il documento in quest\'area',
+    'titolo_upload'       => 'Carica il documento',
+    'lede_upload'         => 'Word <span class="mono">.docx</span>, PDF, RTF, testo semplice o Markdown. Il formato in uscita si sceglie al passo dopo.',
+    'titolo_eccezioni'    => 'Cosa aspettarsi, formato per formato',
+    'titolo_colonne'      => 'Cosa viene tenuto',
+    'titolo_regole'       => 'Cosa passa, e come',
+    'nota_informative'    => 'Quello che la conversione ha deciso da sé, o che il formato di partenza non poteva dire:',
+    'titolo_rivedere'     => "Cosa non è passato intero",
+    'etichetta_chiave'    => 'Dove',
+    'etichetta_colonna'   => 'Formato',
+    'avviso_rivedere'     => 'Quello che il documento aveva e che non è passato intero. Non sono errori da correggere: sono cose da sapere prima di fidarti del risultato.',
+    'colonna_da'          => 'Nel documento',
+    'colonna_a'           => 'In Markdown',
+    // L'elenco che sostituisce le «colonne in uscita» del tracciato Scidoo.
+    'colonne_uscita'      => [
+        'Titoli', 'Paragrafi', 'Grassetto', 'Corsivo', 'Codice in linea',
+        'Blocchi di codice', 'Elenchi puntati', 'Elenchi numerati', 'Rientri',
+        'Citazioni', 'Tabelle', 'Collegamenti', 'Immagini', 'Righe orizzontali',
+    ],
     'nota_uscita'         => 'Se il documento porta immagini e scegli Markdown o testo, il risultato è uno <span class="mono">.zip</span> con la cartella <span class="mono">media/</span>.',
 ];

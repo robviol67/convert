@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use Vblite\Convert\Conversioni\OctoScidoo\ScrittoreScidoo;
+
 /**
  * Manifest della tipologia Octo → Scidoo.
  * Alimenta la tessera nella home (2b) e la scheda dello step 1 (2c): i testi
@@ -93,6 +95,24 @@ return [
         ],
     ],
     'invito_upload'       => "Trascina il PDF in quest'area",
+    'titolo_upload'       => 'Carica la stampa Octorate',
+    'lede_upload'         => 'Serve l\'export <em>Stampa clienti presenti</em>, in PDF, esattamente come lo produce Octorate — niente ritagli né stampe parziali.',
+    'titolo_eccezioni'    => 'Le sette eccezioni note di questo tracciato',
+    'titolo_colonne'      => 'Colonne in uscita',
+    'titolo_regole'       => 'Regole di conversione · 23 colonne Octorate → 32 colonne Scidoo',
+    'nota_informative'    => 'Voci risolte dalle regole del tracciato e riportate qui solo per trasparenza:',
+    'titolo_rivedere'     => "Da rivedere prima dell'import",
+    'etichetta_chiave'    => 'N°pren.',
+    'etichetta_colonna'   => 'Colonna Scidoo',
+    'avviso_rivedere'     => 'Sono già nel file, ma con un valore incerto: Scidoo le accetterebbe sbagliate. Correggi qui e il foglio si riscrive.',
+    'colonna_da'          => 'Octorate',
+    'colonna_a'           => 'Scidoo',
+    // Le colonne le sa lo scrittore: elencarle di nuovo qui vorrebbe dire
+    // tenerle allineate a mano. La nota in R1 non è una colonna, si salta.
+    'colonne_uscita'      => array_values(array_filter(
+        array_map('trim', (new ScrittoreScidoo())->testate()),
+        static fn(string $t): bool => !str_starts_with($t, '*')
+    )),
     'nota_uscita'         => 'Intestazioni e ordine colonne dal tuo <span class="mono">File Import Prenotazioni.xlsx</span>.',
 
     'sorgenti_camera' => [

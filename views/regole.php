@@ -1,13 +1,12 @@
 <?php
 /**
  * 2d — Step 2, le regole del tracciato. Tabella e regole opzionali vengono dal
- * manifest; i conteggi sono quelli veri, letti dal PDF appena caricato.
+ * manifest; i conteggi sono quelli veri, letti dal file appena caricato.
  * @var array<string,mixed> $manifest
  * @var array<string,mixed> $analisi
  * @var array<string,mixed> $bozza
  */
 use Vblite\Convert\Auth;
-use Vblite\Convert\Conversioni\OctoScidoo\Raggruppatore;
 use Vblite\Convert\Vista;
 
 $passoCorrente = 2;
@@ -17,7 +16,13 @@ $intestazione = $analisi['intestazione'];
 $periodo = ($intestazione['dal'] ?? null) !== null
     ? $intestazione['dal'] . ' – ' . $intestazione['al']
     : 'periodo non dichiarato';
-$default = Raggruppatore::REGOLE_DEFAULT;
+// I valori di partenza delle regole li dichiara il manifest.
+$lessico = Vista::lessico((string) $bozza['tipologia']);
+
+$default = [];
+foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
+    $default[$regola['chiave']] = $regola['default'];
+}
 ?>
 <form method="post" action="?p=converti" style="display:contents">
 <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
@@ -27,10 +32,7 @@ $default = Raggruppatore::REGOLE_DEFAULT;
     <div>
       <h2 class="h2"><?= Vista::e($bozza['nome_originale']) ?></h2>
       <p class="mono" style="color:rgba(32,30,29,.55);margin:8px 0 0">
-        <?= Vista::numero($analisi['pagine']) ?> pagine ·
-        <?= Vista::numero($analisi['righe_lette']) ?> righe cliente ·
-        <?= Vista::numero($analisi['prenotazioni']) ?> prenotazioni ·
-        <?= Vista::e($periodo) ?> · testo nativo
+        <?= Vista::e($analisi['sommario'] ?? '') ?>
       </p>
     </div>
     <a class="btn btn-ghost" href="?p=carica&amp;t=<?= Vista::e($bozza['tipologia']) ?>">Cambia file</a>
@@ -40,8 +42,8 @@ $default = Raggruppatore::REGOLE_DEFAULT;
 
     <div style="display:flex;flex-direction:column;gap:var(--space-4)">
       <div>
-        <p class="kick" style="margin:0 0 var(--space-3)">Regole di conversione · 23 colonne Octorate → 32 colonne Scidoo</p>
-        <div class="mrow hd"><span class="kick">Octorate</span><span></span><span class="kick">Scidoo</span><span class="kick">Regola</span></div>
+        <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($manifest['titolo_regole'] ?? 'Regole di conversione') ?></p>
+        <div class="mrow hd"><span class="kick"><?= Vista::e($manifest['colonna_da'] ?? 'Da') ?></span><span></span><span class="kick"><?= Vista::e($manifest['colonna_a'] ?? 'A') ?></span><span class="kick">Regola</span></div>
         <?php foreach ($manifest['regole_conversione'] as $regola): ?>
           <div class="mrow">
             <span class="mono"><?= Vista::e($regola['da']) ?></span>
@@ -57,7 +59,10 @@ $default = Raggruppatore::REGOLE_DEFAULT;
         <?php endforeach; ?>
       </div>
 
-      <?php if ($analisi['anteprima'] !== []): ?>
+      <?php // L'unico blocco che sa di prenotazioni: compare solo se la tipologia
+            // produce un'anteprima del raggruppamento, cioè oggi solo Octo → Scidoo.
+            // Quando servirà a una seconda tipologia, le colonne verranno dal manifest. ?>
+      <?php if (!empty($analisi['anteprima'])): ?>
         <div style="flex:none;display:flex;flex-direction:column">
           <p class="kick" style="margin:0 0 var(--space-3)">
             Anteprima del raggruppamento — prenotazione <?= Vista::e($analisi['anteprima'][0]['npren']) ?>,
@@ -88,7 +93,8 @@ $default = Raggruppatore::REGOLE_DEFAULT;
             </table>
           </div>
         </div>
-      <?php endif; ?>
+        <?php endif; ?>
+      
     </div>
 
     <div style="display:flex;flex-direction:column;gap:var(--space-6)">
@@ -117,7 +123,7 @@ $default = Raggruppatore::REGOLE_DEFAULT;
           <div class="field"><label for="al">Al</label><input class="input" id="al" name="periodo_al" value="<?= Vista::e($intestazione['al'] ?? '') ?>"></div>
         </div>
         <p style="font-size:13px;color:rgba(32,30,29,.55);margin:var(--space-2) 0 0">
-          Tutto il PDF: <?= Vista::numero($analisi['prenotazioni']) ?> prenotazioni.
+          Tutto il file: <?= Vista::numero($analisi['prenotazioni']) ?> <?= Vista::e($lessico['unita_plurale']) ?>.
         </p>
       </div>
 
@@ -153,7 +159,7 @@ $default = Raggruppatore::REGOLE_DEFAULT;
     <a class="btn btn-ghost" href="?p=carica&amp;t=<?= Vista::e($bozza['tipologia']) ?>">Indietro</a>
     <div style="display:flex;align-items:center;gap:var(--space-4)">
       <span class="mono" style="color:rgba(32,30,29,.5)">
-        <?= Vista::numero($analisi['prenotazioni']) ?> righe in uscita · <?= Vista::numero($analisi['anomalie']) ?> da rivedere
+        <?= Vista::numero($analisi['prenotazioni']) ?> <?= Vista::e($lessico['unita_plurale']) ?> in uscita · <?= Vista::numero($analisi['anomalie']) ?> da rivedere
       </span>
       <button class="btn btn-secondary" type="submit" name="azione" value="salva_preset">Salva queste regole</button>
       <button class="btn btn-primary" type="submit" name="azione" value="converti">Converti</button>

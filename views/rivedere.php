@@ -9,7 +9,8 @@
 use Vblite\Convert\Auth;
 use Vblite\Convert\Vista;
 
-$lessico = Vista::lessico((string) $job['tipologia']);
+$lessico  = Vista::lessico((string) $job['tipologia']);
+$manifest = \Vblite\Convert\Conversioni\Registro::trova((string) $job['tipologia'])?->manifest() ?? [];
 
 $daCorreggere = array_values(array_filter($anomalie, static fn(array $a): bool => $a['gravita'] === 'correggi'));
 $informative  = array_values(array_filter($anomalie, static fn(array $a): bool => $a['gravita'] === 'informativa'));
@@ -24,10 +25,9 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
       <p class="kick" style="margin:0 0 8px;color:var(--color-accent-2-700)">
         <?= Vista::numero(count($daCorreggere)) ?> <?= Vista::e($lessico['unita_plurale']) ?> su <?= Vista::numero($job['righe_scritte']) ?>
       </p>
-      <h2 class="h2">Da rivedere prima dell'import</h2>
+      <h2 class="h2"><?= Vista::e($manifest['titolo_rivedere'] ?? 'Da rivedere') ?></h2>
       <p class="lede" style="font-size:16px">
-        Sono già nel file, ma con un valore incerto: Scidoo le accetterebbe sbagliate.
-        Correggi qui e il foglio si riscrive.
+        <?= Vista::e($manifest['avviso_rivedere'] ?? '') ?>
       </p>
     </div>
     <div style="display:flex;gap:var(--space-2)">
@@ -44,10 +44,10 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
     <?php else: ?>
       <table class="table" style="width:100%;font-size:13.5px">
         <thead><tr>
-          <th style="width:70px">N°pren.</th>
+          <th style="width:70px"><?= Vista::e($manifest['etichetta_chiave'] ?? 'Chiave') ?></th>
           <th style="width:150px">Cliente</th>
           <th>Cosa non torna</th>
-          <th style="width:150px">Colonna Scidoo</th>
+          <th style="width:150px"><?= Vista::e($manifest['etichetta_colonna'] ?? 'Colonna') ?></th>
           <th style="width:210px">Correzione</th>
           <th style="width:80px"></th>
         </tr></thead>
@@ -102,9 +102,12 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
           <i style="width:70%;background:var(--color-accent-2-400)"></i><i></i><i></i><i style="width:40%"></i>
         </div>
         <div>
-          <p class="kick" style="margin:0 0 8px">Fatto senza chiedere · <?= Vista::numero(count($informative)) ?> casi</p>
+          <p class="kick" style="margin:0 0 8px">
+            Fatto senza chiedere · <?= Vista::numero(count($informative)) ?>
+            <?= count($informative) === 1 ? 'caso' : 'casi' ?>
+          </p>
           <p style="font-size:15px;line-height:1.6;color:rgba(32,30,29,.7);margin:0;max-width:60ch">
-            Voci risolte dalle regole del tracciato e riportate qui solo per trasparenza:
+            <?= Vista::e($manifest['nota_informative'] ?? 'Deciso dalle regole della conversione e riportato qui solo per trasparenza:') ?>
             <?php
             $perColonna = [];
             foreach ($informative as $i) {

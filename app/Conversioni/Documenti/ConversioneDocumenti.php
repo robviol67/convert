@@ -160,7 +160,15 @@ final class ConversioneDocumenti implements Conversione
         Formati::lettore($percorsoIngresso)
             ->leggi($percorsoIngresso, sys_get_temp_dir() . '/vb-analisi', $documento);
 
+        $pezzi = [Formati::formatiInIngresso()[strtolower(pathinfo($percorsoIngresso, PATHINFO_EXTENSION))] ?? 'documento'];
+        $pezzi[] = number_format($documento->quanti(), 0, ',', '.') . ' blocchi';
+        $pezzi[] = number_format($documento->parole(), 0, ',', '.') . ' parole';
+        if ($documento->immagini() !== []) {
+            $pezzi[] = count($documento->immagini()) . ' immagini';
+        }
+
         return [
+            'sommario'     => implode(' · ', $pezzi),
             'pagine'       => $documento->quanti(),
             'intestazione' => [
                 'formato' => Formati::formatiInIngresso()[strtolower(pathinfo($percorsoIngresso, PATHINFO_EXTENSION))] ?? '',

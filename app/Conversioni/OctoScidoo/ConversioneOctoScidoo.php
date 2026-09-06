@@ -133,7 +133,18 @@ final class ConversioneOctoScidoo implements Conversione
             $daCorreggere += ($anomalia['gravita'] ?? 'correggi') === 'correggi' ? 1 : 0;
         }
 
+        $periodo = ($estratto['intestazione']['dal'] ?? null) !== null
+            ? $estratto['intestazione']['dal'] . ' – ' . $estratto['intestazione']['al']
+            : 'periodo non dichiarato';
+
         return [
+            'sommario' => sprintf(
+                '%s pagine · %s righe cliente · %s prenotazioni · %s · testo nativo',
+                number_format($estratto['pagine'], 0, ',', '.'),
+                number_format($risultato['righe_lette'], 0, ',', '.'),
+                number_format(count($risultato['prenotazioni']), 0, ',', '.'),
+                $periodo
+            ),
             'pagine'        => $estratto['pagine'],
             'intestazione'  => $estratto['intestazione'],
             'righe_lette'   => $risultato['righe_lette'],

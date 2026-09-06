@@ -19,8 +19,8 @@ require __DIR__ . '/parti/passi.php';
   <div class="wizard" style="display:grid;grid-template-columns:1fr 460px;gap:var(--space-8)">
 
     <div style="display:flex;flex-direction:column">
-      <h2 class="h2">Carica la stampa Octorate</h2>
-      <p class="lede" style="font-size:16px">Serve l'export <em>Stampa clienti presenti</em>, in PDF, esattamente come lo produce Octorate — niente ritagli né stampe parziali.</p>
+      <h2 class="h2"><?= Vista::e($manifest['titolo_upload'] ?? 'Carica il file') ?></h2>
+      <p class="lede" style="font-size:16px"><?= $manifest['lede_upload'] ?? '' ?></p>
 
       <form id="form-upload" method="post" action="?p=upload" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
@@ -44,7 +44,7 @@ require __DIR__ . '/parti/passi.php';
       </form>
 
       <div style="margin-top:var(--space-6)">
-        <p class="kick" style="margin:0 0 var(--space-3)">Le sette eccezioni note di questo tracciato</p>
+        <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($manifest['titolo_eccezioni'] ?? 'Cosa sapere') ?></p>
         <div class="numerato">
           <?php foreach ($manifest['eccezioni'] as $i => $eccezione): ?>
             <div>
@@ -81,12 +81,17 @@ require __DIR__ . '/parti/passi.php';
         <?php endforeach; ?>
       </div>
 
-      <p class="kick" style="margin:var(--space-6) 0 var(--space-2)">Colonne in uscita</p>
-      <p class="mono" style="font-size:12px;line-height:1.7;color:rgba(32,30,29,.55);margin:0">
-        <?php $testate = (new \Vblite\Convert\Conversioni\OctoScidoo\ScrittoreScidoo())->testate();
-              $visibili = array_values(array_filter($testate, static fn(string $t): bool => !str_starts_with($t, '*'))); ?>
-        <?= Vista::e(implode(' · ', array_map('trim', $visibili))) ?>
-      </p>
+      <?php
+        // L'elenco lo dichiara la tipologia: per un tracciato sono le colonne,
+        // per un documento i tratti che sopravvivono alla conversione.
+        $colonne = $manifest['colonne_uscita'] ?? [];
+      ?>
+      <?php if ($colonne !== []): ?>
+        <p class="kick" style="margin:var(--space-6) 0 var(--space-2)"><?= Vista::e($manifest['titolo_colonne'] ?? 'In uscita') ?></p>
+        <p class="mono" style="font-size:12px;line-height:1.7;color:rgba(32,30,29,.55);margin:0">
+          <?= Vista::e(implode(' · ', array_map('trim', $colonne))) ?>
+        </p>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -112,7 +117,12 @@ require __DIR__ . '/parti/passi.php';
 
   function accetta(file) {
     if (!file) return;
-    if (file.type !== 'application/pdf') { nota.textContent = 'Serve un PDF.'; return; }
+    var ammesse = <?= json_encode($manifest['estensioni_ingresso'] ?? ['pdf']) ?>;
+    var suo = (file.name.split('.').pop() || '').toLowerCase();
+    if (ammesse.indexOf(suo) === -1) {
+      nota.textContent = 'Formati accettati: ' + ammesse.join(', ') + '.';
+      return;
+    }
     if (file.size > maxByte) { nota.textContent = 'Il file supera i 50 MB.'; return; }
     titolo.textContent = file.name;
     nota.textContent = Math.round(file.size / 1024 / 1024 * 10) / 10 + ' MB · pronto da leggere';
