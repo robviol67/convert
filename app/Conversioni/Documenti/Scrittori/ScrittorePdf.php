@@ -64,6 +64,11 @@ final class ScrittorePdf implements Scrittore
         return 'PDF';
     }
 
+    /** Questo formato non ha impostazioni: le regole non lo riguardano. */
+    public function configura(array $regole): void
+    {
+    }
+
     public function apri(string $percorso, Documento $documento): void
     {
         $this->percorso  = $percorso;

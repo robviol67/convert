@@ -498,6 +498,19 @@ function regoleDaPost(array $post, array $manifest): array
         $regole[$regola['chiave']] = isset($post['regole'][$regola['chiave']]);
     }
 
+    // Campi liberi: si accettano ma si accorciano, perché finiscono dentro il
+    // file prodotto (il titolo di un EPUB, per dire) e non c'è motivo che
+    // qualcuno ci infili mezzo romanzo.
+    foreach ($manifest['campi'] ?? [] as $campo) {
+        $regole[$campo['chiave']] = mb_substr(trim((string) ($post['campi'][$campo['chiave']] ?? '')), 0, 200);
+    }
+
+    // Scelte a elenco: solo un valore fra quelli dichiarati.
+    foreach ($manifest['scelte'] ?? [] as $scelta) {
+        $valore = (string) ($post['scelte'][$scelta['chiave']] ?? '');
+        $regole[$scelta['chiave']] = isset($scelta['opzioni'][$valore]) ? $valore : $scelta['default'];
+    }
+
     if (!empty($manifest['sorgenti_camera'])) {
         $sorgenti = array_keys($manifest['sorgenti_camera']);
         $regole['sorgente_camera'] = in_array($post['sorgente_camera'] ?? '', $sorgenti, true)

@@ -49,6 +49,11 @@ final class ScrittoreDocx implements Scrittore
     private int $resi = 0;
     private ?Documento $documento = null;
 
+    /** Questo formato non ha impostazioni: le regole non lo riguardano. */
+    public function configura(array $regole): void
+    {
+    }
+
     public function apri(string $percorso, Documento $documento): void
     {
         $this->immagini     = [];

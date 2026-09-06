@@ -20,6 +20,14 @@ interface Scrittore
 
     public static function nome(): string;
 
+    /**
+     * Le regole scelte nello step 2, per gli scrittori che ne hanno bisogno
+     * (titolo e autore di un EPUB, per esempio). Chi non le usa non fa niente.
+     *
+     * @param array<string,mixed> $regole
+     */
+    public function configura(array $regole): void;
+
     /** Apre il file e scrive quello che precede il contenuto. */
     public function apri(string $percorso, Documento $documento): void;
 

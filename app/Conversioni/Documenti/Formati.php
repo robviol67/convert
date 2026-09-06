@@ -5,12 +5,15 @@ namespace Vblite\Convert\Conversioni\Documenti;
 
 use Vblite\Convert\Conversioni\Documenti\Lettori\Lettore;
 use Vblite\Convert\Conversioni\Documenti\Lettori\LettoreDocx;
+use Vblite\Convert\Conversioni\Documenti\Lettori\LettoreEpub;
+use Vblite\Convert\Conversioni\Documenti\Lettori\LettoreHtml;
 use Vblite\Convert\Conversioni\Documenti\Lettori\LettoreMarkdown;
 use Vblite\Convert\Conversioni\Documenti\Lettori\LettorePdf;
 use Vblite\Convert\Conversioni\Documenti\Lettori\LettoreRtf;
 use Vblite\Convert\Conversioni\Documenti\Lettori\LettoreTxt;
 use Vblite\Convert\Conversioni\Documenti\Scrittori\Scrittore;
 use Vblite\Convert\Conversioni\Documenti\Scrittori\ScrittoreDocx;
+use Vblite\Convert\Conversioni\Documenti\Scrittori\ScrittoreEpub;
 use Vblite\Convert\Conversioni\Documenti\Scrittori\ScrittoreMarkdown;
 use Vblite\Convert\Conversioni\Documenti\Scrittori\ScrittorePdf;
 use Vblite\Convert\Conversioni\Documenti\Scrittori\ScrittoreRtf;
@@ -29,6 +32,8 @@ final class Formati
     private const LETTORI = [
         LettoreMarkdown::class,
         LettoreDocx::class,
+        LettoreEpub::class,
+        LettoreHtml::class,
         LettorePdf::class,
         LettoreRtf::class,
         LettoreTxt::class,
@@ -38,6 +43,7 @@ final class Formati
     private const SCRITTORI = [
         ScrittoreMarkdown::class,
         ScrittoreDocx::class,
+        ScrittoreEpub::class,
         ScrittorePdf::class,
         ScrittoreRtf::class,
         ScrittoreTxt::class,
@@ -67,11 +73,15 @@ final class Formati
         throw new \RuntimeException("Non so leggere i file .{$estensione}.");
     }
 
-    public static function scrittore(string $formato): Scrittore
+    /** @param array<string,mixed> $regole le impostazioni scelte nello step 2 */
+    public static function scrittore(string $formato, array $regole = []): Scrittore
     {
         foreach (self::SCRITTORI as $classe) {
             if ($classe::estensione() === strtolower($formato)) {
-                return new $classe();
+                $scrittore = new $classe();
+                $scrittore->configura($regole);
+
+                return $scrittore;
             }
         }
 

@@ -155,8 +155,170 @@ foreach ([Blocco::TITOLO, Blocco::ELENCO, Blocco::CITAZIONE, Blocco::CODICE, Blo
     verifica("andata e ritorno, {$tipo}", $prima[$tipo] ?? 0, $dopo[$tipo] ?? 0);
 }
 
+// ── EPUB ─────────────────────────────────────────────────────────────────────
+// Il documento di prova ha due titoli: devono uscire due capitoli.
+$epub = $tmp . '/libro.epub';
+$documentoEpub = new Documento();
+$scrittoreEpub = Formati::scrittore('epub', [
+    'epub_titolo' => 'Titolo del libro',
+    'epub_autore' => 'Chi lo ha scritto',
+    'epub_lingua' => 'it',
+    'epub_taglio' => '1',
+]);
+$scrittoreEpub->apri($epub, $documentoEpub);
+$documentoEpub->consuma(static fn(Blocco $b) => $scrittoreEpub->blocco($b));
+Formati::lettore($sorgente)->leggi($sorgente, $tmp . '/media-epub', $documentoEpub);
+$scrittoreEpub->chiudi();
+
+$ze = new ZipArchive();
+verifica('l\'EPUB si apre come zip', true, $ze->open($epub) === true);
+
+// Il mimetype deve essere il primo file e non compresso: è così che un lettore
+// riconosce un EPUB senza aprirlo tutto.
+$primo = $ze->statIndex(0);
+verifica('mimetype è il primo file', 'mimetype', $primo['name']);
+verifica('mimetype non è compresso', ZipArchive::CM_STORE, $primo['comp_method']);
+verifica('mimetype dice cosa è', 'application/epub+zip', $ze->getFromName('mimetype'));
+
+foreach (['META-INF/container.xml', 'OEBPS/content.opf', 'OEBPS/nav.xhtml', 'OEBPS/toc.ncx'] as $parte) {
+    vero("l'EPUB contiene {$parte}", $ze->locateName($parte) !== false);
+}
+
+$opf = (string) $ze->getFromName('OEBPS/content.opf');
+vero('l\'OPF porta il titolo scelto', str_contains($opf, '<dc:title>Titolo del libro</dc:title>'));
+vero('l\'OPF porta l\'autore', str_contains($opf, '<dc:creator>Chi lo ha scritto</dc:creator>'));
+vero('l\'OPF porta la lingua', str_contains($opf, '<dc:language>it</dc:language>'));
+vero('l\'OPF dichiara la data di modifica, che EPUB 3 pretende', str_contains($opf, 'dcterms:modified'));
+
+// Ogni file dichiarato nel manifest deve esistere davvero, e ogni voce dello
+// spine deve puntare a un id del manifest: sono i due modi più comuni di
+// produrre un EPUB che si apre a metà.
+preg_match_all('~<item\b[^>]*id="([^"]+)"[^>]*href="([^"]+)"~', $opf, $voci, PREG_SET_ORDER);
+$mancanti = [];
+$idNoti   = [];
+foreach ($voci as $voce) {
+    $idNoti[$voce[1]] = true;
+    if ($ze->locateName('OEBPS/' . $voce[2]) === false) {
+        $mancanti[] = $voce[2];
+    }
+}
+verifica('ogni file del manifest esiste nello zip', [], $mancanti);
+
+preg_match_all('~<itemref\b[^>]*idref="([^"]+)"~', $opf, $riferimenti);
+$orfani = array_values(array_filter($riferimenti[1], static fn(string $id): bool => !isset($idNoti[$id])));
+verifica('ogni voce dello spine punta al manifest', [], $orfani);
+
+// Tutte le parti XML devono essere ben formate: l'XHTML non perdona.
+$malformate = [];
+for ($i = 0; $i < $ze->numFiles; $i++) {
+    $nome = (string) $ze->getNameIndex($i);
+    if (preg_match('~\.(xhtml|opf|ncx|xml)$~', $nome) === 1
+        && @simplexml_load_string((string) $ze->getFromName($nome)) === false) {
+        $malformate[] = $nome;
+    }
+}
+verifica('tutte le parti XML sono ben formate', [], $malformate);
+
+$capitoli = 0;
+for ($i = 0; $i < $ze->numFiles; $i++) {
+    $capitoli += str_starts_with((string) $ze->getNameIndex($i), 'OEBPS/testo/capitolo-') ? 1 : 0;
+}
+// Il documento di prova ha UN titolo di primo livello e uno di secondo:
+// tagliando al primo livello esce un capitolo solo.
+verifica('un titolo di primo livello dà un capitolo', 1, $capitoli);
+
+$nav = (string) $ze->getFromName('OEBPS/nav.xhtml');
+$ze->close();
+
+// Tagliando anche al secondo livello i capitoli diventano due: è la scelta
+// offerta nello step 2, e deve cambiare davvero il risultato.
+$epub2 = $tmp . '/libro2.epub';
+$doc2  = new Documento();
+$scr2  = Formati::scrittore('epub', ['epub_taglio' => '2']);
+$scr2->apri($epub2, $doc2);
+$doc2->consuma(static fn(Blocco $b) => $scr2->blocco($b));
+Formati::lettore($sorgente)->leggi($sorgente, $tmp . '/media-epub3', $doc2);
+$scr2->chiudi();
+
+$ze2 = new ZipArchive();
+$ze2->open($epub2);
+$capitoli2 = 0;
+for ($i = 0; $i < $ze2->numFiles; $i++) {
+    $capitoli2 += str_starts_with((string) $ze2->getNameIndex($i), 'OEBPS/testo/capitolo-') ? 1 : 0;
+}
+$ze2->close();
+verifica('tagliando anche al secondo livello i capitoli diventano due', 2, $capitoli2);
+
+$ze->open($epub);
+vero('l\'indice è marcato come tale', str_contains($nav, 'epub:type="toc"'));
+verifica('l\'indice ha una voce per titolo', 2, substr_count($nav, '<li><a href='));
+vero('le voci dell\'indice puntano a un\'ancora', str_contains($nav, '.xhtml#t'));
+
+vero('senza immagini la copertina è tipografica',
+    str_contains((string) $ze->getFromName('OEBPS/testo/copertina.xhtml'), 'Titolo del libro'));
+$ze->close();
+
+// L'EPUB si rilegge, e ritrova quello che c'era.
+$ritornoEpub = new Documento();
+Formati::lettore($epub)->leggi($epub, $tmp . '/media-epub2', $ritornoEpub);
+vero('l\'EPUB riletto ritrova i titoli', ($ritornoEpub->riepilogo()[Blocco::TITOLO] ?? 0) >= 2);
+vero('l\'EPUB riletto ritrova gli elenchi', ($ritornoEpub->riepilogo()[Blocco::ELENCO] ?? 0) >= 5);
+vero('l\'EPUB riletto ritrova la tabella', ($ritornoEpub->riepilogo()[Blocco::TABELLA] ?? 0) >= 1);
+
+// ── HTML ─────────────────────────────────────────────────────────────────────
+$html = $tmp . '/pagina.html';
+file_put_contents($html, '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    . '<style>p{color:red}</style><title>Testata</title></head><body>'
+    . '<h1>Titolo</h1>'
+    . '<p>Testo con <strong>grassetto</strong>, <em>corsivo</em>, <code>codice</code> '
+    . 'e <a href="https://vblite.com">un link</a>.</p>'
+    . '<p>Entit&agrave;: &lt;tag&gt; &amp; &quot;virgolette&quot;.</p>'
+    . '<ul><li>uno</li><li>due</li></ul>'
+    . '<table><tr><th>A</th><th>B</th></tr><tr><td>x</td><td>y</td></tr></table>'
+    . '<script>var non = "deve comparire";</script>'
+    . '</body></html>');
+
+$daHtml = new Documento();
+Formati::lettore($html)->leggi($html, $tmp . '/media-html', $daHtml);
+$blocchiHtml = $daHtml->blocchi();
+
+verifica('l\'HTML dà due titoli? no: uno', 1, $daHtml->riepilogo()[Blocco::TITOLO] ?? 0);
+verifica('l\'HTML dà due voci di elenco', 2, $daHtml->riepilogo()[Blocco::ELENCO] ?? 0);
+verifica('l\'HTML dà una tabella', 1, $daHtml->riepilogo()[Blocco::TABELLA] ?? 0);
+
+$tuttoIlTesto = '';
+foreach ($blocchiHtml as $b) {
+    $tuttoIlTesto .= ' ' . $b->nudo();
+}
+vero('il contenuto di <script> non entra nel documento', !str_contains($tuttoIlTesto, 'deve comparire'));
+vero('il contenuto di <style> non entra nel documento', !str_contains($tuttoIlTesto, 'color:red'));
+vero('il titolo della testata non diventa testo', !str_contains($tuttoIlTesto, 'Testata'));
+vero('le entità si sciolgono', str_contains($tuttoIlTesto, 'Entità: <tag> & "virgolette".'));
+
+// I tratti in linea devono sopravvivere, non solo il testo.
+$conTratti = null;
+foreach ($blocchiHtml as $b) {
+    if (str_contains($b->nudo(), 'grassetto')) {
+        $conTratti = $b;
+    }
+}
+vero('il paragrafo con i tratti esiste', $conTratti !== null);
+if ($conTratti !== null) {
+    $grassetti = $corsivi = $codici = $collegamenti = 0;
+    foreach ($conTratti->testi as $t) {
+        $grassetti    += $t->grassetto ? 1 : 0;
+        $corsivi      += $t->corsivo ? 1 : 0;
+        $codici       += $t->codice ? 1 : 0;
+        $collegamenti += $t->collegamento !== null ? 1 : 0;
+    }
+    verifica('il grassetto sopravvive', 1, $grassetti);
+    verifica('il corsivo sopravvive', 1, $corsivi);
+    verifica('il codice in linea sopravvive', 1, $codici);
+    verifica('il collegamento sopravvive', 1, $collegamenti);
+}
+
 // ── Il registro dei formati ──────────────────────────────────────────────────
-verifica('cinque formati in ingresso', 5, count(Formati::formatiInUscita()));
+verifica('sei formati in uscita', 6, count(Formati::formatiInUscita()));
 vero('il Markdown è fra i formati in ingresso', in_array('md', Formati::estensioniInIngresso(), true));
 
 // Un .doc si rifiuta con una spiegazione, non con un errore generico.

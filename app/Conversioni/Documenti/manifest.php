@@ -21,6 +21,9 @@ return [
         . 'direzione. Tiene titoli, elenchi, tabelle, grassetto e corsivo; le immagini vengono estratte a fianco.',
 
     'si_puo' => [
+        'Word <span class="mono">.docx</span> → <strong>EPUB</strong>, con copertina e indice costruito dai titoli',
+        'EPUB → Word, PDF o Markdown: il libro torna un documento',
+        'HTML e pagine salvate → Markdown pulito',
         'Word <span class="mono">.docx</span> → Markdown: titoli, elenchi, tabelle, collegamenti e immagini',
         'Markdown → Word, PDF o RTF, con stili veri e non solo testo',
         'PDF → Markdown: il testo si recupera, la struttura si deduce',
@@ -64,7 +67,58 @@ return [
         ['da' => 'Note, revisioni, commenti',  'a' => null,                  'regola' => 'Non previsti dal modello → si perdono, e viene detto'],
     ],
 
-    'regole_opzionali' => [],
+    'regole_opzionali' => [
+        [
+            'chiave'  => 'epub_copertina',
+            'titolo'  => 'Usa la prima immagine come copertina',
+            'nota'    => 'Se il documento non ne ha, la copertina viene fatta col titolo e l\'autore.',
+            'default' => true,
+            'solo_se_formato' => ['epub'],
+        ],
+    ],
+
+    /**
+     * Campi di testo dello step 2. «solo_se_formato» li fa comparire soltanto
+     * dove servono: chiedere l'autore a chi converte in .txt sarebbe rumore.
+     */
+    'campi' => [
+        [
+            'chiave'    => 'epub_titolo',
+            'etichetta' => 'Titolo del libro',
+            'nota'      => 'Se lo lasci vuoto viene usato il nome del file.',
+            'default'   => '',
+            'solo_se_formato' => ['epub'],
+        ],
+        [
+            'chiave'    => 'epub_autore',
+            'etichetta' => 'Autore',
+            'nota'      => null,
+            'default'   => '',
+            'solo_se_formato' => ['epub'],
+        ],
+        [
+            'chiave'    => 'epub_lingua',
+            'etichetta' => 'Lingua',
+            'nota'      => 'Codice a due lettere: it, en, fr…',
+            'default'   => 'it',
+            'solo_se_formato' => ['epub'],
+        ],
+    ],
+
+    'scelte' => [
+        [
+            'chiave'    => 'epub_taglio',
+            'etichetta' => 'Dividi in capitoli',
+            'nota'      => 'I capitoli si tagliano ai titoli, e l\'indice si costruisce dagli stessi.',
+            'opzioni'   => [
+                '1' => 'A ogni titolo di primo livello',
+                '2' => 'Anche ai titoli di secondo livello',
+                '0' => 'Un capitolo unico',
+            ],
+            'default'   => '1',
+            'solo_se_formato' => ['epub'],
+        ],
+    ],
 
     /** I formati fra cui scegliere in uscita: li dichiara il registro dei formati. */
     'formati_uscita'      => $inUscita,

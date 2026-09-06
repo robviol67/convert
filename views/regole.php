@@ -24,7 +24,7 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
     $default[$regola['chiave']] = $regola['default'];
 }
 ?>
-<form method="post" action="?p=converti" style="display:contents">
+<form method="post" action="?p=converti" style="display:contents" id="regole">
 <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
 
 <div class="body">
@@ -130,17 +130,53 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
       <div>
         <p class="kick" style="margin:0 0 var(--space-3)">Regole opzionali</p>
         <?php foreach ($manifest['regole_opzionali'] as $i => $regola): ?>
-          <label style="display:flex;gap:10px;font-size:14.5px;align-items:flex-start<?= $i > 0 ? ';margin-top:var(--space-3)' : '' ?>">
+          <label class="opzione" data-formati="<?= Vista::e(implode(' ', $regola['solo_se_formato'] ?? [])) ?>"
+                 style="display:flex;gap:10px;font-size:14.5px;align-items:flex-start<?= $i > 0 ? ';margin-top:var(--space-3)' : '' ?>">
             <input type="checkbox" name="regole[<?= Vista::e($regola['chiave']) ?>]" value="1" style="margin-top:4px"
                    <?= $regola['default'] ? 'checked' : '' ?>>
             <span><?= Vista::e($regola['titolo']) ?>
-              <?php if ($regola['nota'] !== null): ?>
+              <?php if (($regola['nota'] ?? null) !== null): ?>
                 <span style="display:block;font-size:13px;color:rgba(32,30,29,.6)"><?= Vista::e($regola['nota']) ?></span>
               <?php endif; ?>
             </span>
           </label>
         <?php endforeach; ?>
       </div>
+
+      <?php // Impostazioni proprie di un formato: compaiono solo quando serve. ?>
+      <?php foreach ($manifest['scelte'] ?? [] as $scelta): ?>
+        <div class="opzione" data-formati="<?= Vista::e(implode(' ', $scelta['solo_se_formato'] ?? [])) ?>">
+          <p class="kick" style="margin:0 0 var(--space-3)"><?= Vista::e($scelta['etichetta']) ?></p>
+          <select class="input" style="padding:7px 9px;font-size:14px" name="scelte[<?= Vista::e($scelta['chiave']) ?>]">
+            <?php foreach ($scelta['opzioni'] as $valore => $etichetta): ?>
+              <option value="<?= Vista::e((string) $valore) ?>"
+                      <?= (string) $valore === (string) $scelta['default'] ? 'selected' : '' ?>>
+                <?= Vista::e($etichetta) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <?php if (($scelta['nota'] ?? null) !== null): ?>
+            <p style="font-size:13px;color:rgba(32,30,29,.55);margin:var(--space-2) 0 0"><?= Vista::e($scelta['nota']) ?></p>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+
+      <?php if (($manifest['campi'] ?? []) !== []): ?>
+        <div class="opzione" data-formati="<?= Vista::e(implode(' ', $manifest['campi'][0]['solo_se_formato'] ?? [])) ?>">
+          <p class="kick" style="margin:0 0 var(--space-3)">Dati del file prodotto</p>
+          <?php foreach ($manifest['campi'] as $campo): ?>
+            <div class="field" style="margin-bottom:var(--space-3)">
+              <label for="c-<?= Vista::e($campo['chiave']) ?>"><?= Vista::e($campo['etichetta']) ?></label>
+              <input class="input" id="c-<?= Vista::e($campo['chiave']) ?>"
+                     name="campi[<?= Vista::e($campo['chiave']) ?>]"
+                     value="<?= Vista::e((string) $campo['default']) ?>" maxlength="200">
+              <?php if (($campo['nota'] ?? null) !== null): ?>
+                <span style="display:block;font-size:13px;color:rgba(32,30,29,.55);margin-top:4px"><?= Vista::e($campo['nota']) ?></span>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
 
       <div>
         <p class="kick" style="margin:0 0 var(--space-3)">Numero camera</p>
@@ -167,3 +203,28 @@ foreach ($manifest['regole_opzionali'] ?? [] as $regola) {
   </div>
 </div>
 </form>
+
+<script>
+/* Le impostazioni proprie di un formato compaiono solo quando quel formato è
+   scelto: chiedere l'autore a chi converte in .txt sarebbe rumore. Senza
+   JavaScript restano tutte visibili, e funzionano lo stesso. */
+(function () {
+  var modulo = document.getElementById('regole');
+  if (!modulo) { return; }
+
+  var opzioni = Array.prototype.slice.call(modulo.querySelectorAll('.opzione[data-formati]'));
+  var formati = Array.prototype.slice.call(modulo.querySelectorAll('input[name="formato"]'));
+  if (!formati.length) { return; }
+
+  function aggiorna() {
+    var scelto = (formati.filter(function (r) { return r.checked; })[0] || {}).value;
+    opzioni.forEach(function (o) {
+      var soloPer = (o.getAttribute('data-formati') || '').split(' ').filter(Boolean);
+      o.hidden = soloPer.length > 0 && soloPer.indexOf(scelto) === -1;
+    });
+  }
+
+  formati.forEach(function (r) { r.addEventListener('change', aggiorna); });
+  aggiorna();
+})();
+</script>

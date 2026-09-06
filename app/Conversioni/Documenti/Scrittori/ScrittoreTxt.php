@@ -33,6 +33,11 @@ final class ScrittoreTxt implements Scrittore
     private int $resi = 0;
     private bool $primo = true;
 
+    /** Questo formato non ha impostazioni: le regole non lo riguardano. */
+    public function configura(array $regole): void
+    {
+    }
+
     public function apri(string $percorso, Documento $documento): void
     {
         $f = fopen($percorso, 'w');

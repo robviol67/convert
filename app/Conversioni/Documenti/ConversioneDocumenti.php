@@ -97,7 +97,7 @@ final class ConversioneDocumenti implements Conversione
         $cartellaMedia = dirname($percorsoUscita) . '/' . pathinfo($percorsoUscita, PATHINFO_FILENAME) . '-media';
 
         $documento = new Documento();
-        $scrittore = Formati::scrittore($formato);
+        $scrittore = Formati::scrittore($formato, $regole);
 
         // Il documento si scrive su un file d'appoggio: se poi porta immagini
         // va messo dentro uno zip, e comprimere sopra il file che si sta

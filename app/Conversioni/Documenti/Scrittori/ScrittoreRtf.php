@@ -38,6 +38,11 @@ final class ScrittoreRtf implements Scrittore
         return 'RTF';
     }
 
+    /** Questo formato non ha impostazioni: le regole non lo riguardano. */
+    public function configura(array $regole): void
+    {
+    }
+
     public function apri(string $percorso, Documento $documento): void
     {
         $f = fopen($percorso, 'w');
