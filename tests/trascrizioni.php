@@ -168,6 +168,57 @@ verifica('sopra l\'ora il tempo ha le ore', '[1:02:03] Qualcosa di detto tardi.'
 $affiancato = scrivi('affiancato.txt', "0:07 prima cosa detta\n0:11 seconda cosa detta.\n");
 verifica('tempo e testo sulla stessa riga', 'prima cosa detta seconda cosa detta.', leggi($affiancato)[0]->nudo());
 
+// ── Il pannello di YouTube copiato davvero ───────────────────────────────────
+// Non arriva come uno se lo immagina: tutto su UNA riga, senza a capo, e a
+// ogni tempo è appiccicata l'etichetta per i lettori di schermo — «0:07» e
+// «7 secondi» diventano «0:077 secondi», attaccati anche alla parola dopo.
+$vero = '0:000 secondiPrima frase del discorso, quella di apertura. '
+      . '0:077 secondiSeconda frase, che continua il ragionamento di prima. '
+      . '1:041 minuto e 4 secondiTerza frase, piu\' avanti nel video. '
+      . '2:112 minuti e 11 secondiQuarta e ultima frase.';
+$incollatoVero = scrivi('vero.txt', $vero);
+
+$blocchi = leggi($incollatoVero);
+$tutto   = implode(' ', testi($blocchi));
+vero('nessun tempo resta nel testo', preg_match('~\d:\d\d~', $tutto) !== 1);
+vero('nessuna etichetta parlata resta nel testo', !str_contains($tutto, 'secondi') && !str_contains($tutto, 'minuto'));
+verifica(
+    'le quattro frasi ci sono tutte e in ordine',
+    'Prima frase del discorso, quella di apertura. Seconda frase, che continua il ragionamento di prima. '
+        . 'Terza frase, piu\' avanti nel video. Quarta e ultima frase.',
+    $tutto
+);
+vero('le parole non restano incollate al tempo', !str_contains($tutto, 'secondiPrima'));
+
+// Coi tempi richiesti, i quattro momenti tornano fuori come marcatori.
+$conTempi = implode(' ', testi(leggi($incollatoVero, ['tr_tempi' => 'battuta'])));
+vero('col marcatore torna il primo tempo', str_contains($conTempi, '[0:00]'));
+vero('e anche quello oltre il minuto', str_contains($conTempi, '[1:04]'));
+vero('e quello oltre i due minuti', str_contains($conTempi, '[2:11]'));
+
+// Una battuta per volta: quattro tempi, quattro blocchi.
+verifica('quattro tempi danno quattro battute', 4, count(leggi($incollatoVero, ['tr_raggruppa' => 'battuta'])));
+
+// Un'ora di parlato su una riga sola non può uscire come un paragrafo solo.
+$parole = [];
+for ($i = 1; $i <= 400; $i++) {
+    $parole[] = 'parola' . $i;
+}
+$fiumeUnaRiga = '';
+foreach (array_chunk($parole, 8) as $n => $gruppo) {
+    $fiumeUnaRiga .= sprintf('%d:%02d%d secondi%s ', intdiv($n * 4, 60), ($n * 4) % 60, $n * 4, implode(' ', $gruppo));
+}
+$blocchi = leggi(scrivi('fiume-riga.txt', $fiumeUnaRiga));
+vero('una riga sola non diventa un paragrafo solo', count($blocchi) >= 3);
+verifica('e non si perde una parola', 400, array_sum(array_map(
+    static fn(Blocco $b): int => count(explode(' ', $b->nudo())),
+    $blocchi
+)));
+
+// Un orario dentro il discorso non è un marcatore: manca l'etichetta parlata.
+$orario = scrivi('orario.srt', "1\n00:00:01,000 --> 00:00:04,000\nCi vediamo alle 10:30 davanti al portone.\n");
+verifica('un orario nel discorso resta nel discorso', 'Ci vediamo alle 10:30 davanti al portone.', leggi($orario)[0]->nudo());
+
 // ── Chi parla ────────────────────────────────────────────────────────────────
 $voci = scrivi('voci.vtt', <<<VTT
 WEBVTT

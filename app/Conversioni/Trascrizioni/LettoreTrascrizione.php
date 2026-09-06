@@ -53,6 +53,24 @@ final class LettoreTrascrizione implements Lettore
     /** Il tempo da solo su una riga, o seguito dal testo: la trascrizione incollata. */
     private const SOLO_TEMPO = '~^\s*((?:\d{1,3}:)?\d{1,2}:\d{2})(?:\s+(.*))?$~';
 
+    /** «4 secondi», «1 minuto e 4 secondi», «2 minutes and 11 seconds». */
+    private const DURATA = '(?:\d+\s*(?:or[ae]|minut[oi]|second[oi]|hours?|minutes?|seconds?))';
+
+    /**
+     * Il tempo con appiccicata la sua etichetta parlata.
+     *
+     * È la firma della trascrizione copiata dal pannello di YouTube: accanto a
+     * ogni tempo c'è l'etichetta per chi usa un lettore di schermo, e copiando
+     * viene via anche quella — tutto attaccato, senza spazi né a capo:
+     * «0:077 secondidi Open AI che…» sono «0:07», «7 secondi» e il testo.
+     *
+     * Che l'etichetta ci sia è la prova che quel numero è un tempo e non una
+     * cifra qualunque, e per questo il taglio si fa solo dove c'è: dentro un
+     * discorso «alle 10:30» deve restare quello che è.
+     */
+    private const ORARIO_INCOLLATO = '~((?:\d{1,3}:)?\d{1,2}:\d{2})\s*('
+        . self::DURATA . '(?:\s*(?:,|e|and)?\s*' . self::DURATA . ')*)~u';
+
     private string $raggruppa = 'periodi';
     private string $tempi     = 'no';
     private bool   $pulisci   = true;
@@ -94,8 +112,13 @@ final class LettoreTrascrizione implements Lettore
                 return;
             }
             $tratti = [];
-            if ($this->tempi === 'paragrafo' && $inizio !== null) {
-                $tratti[] = new Testo('[' . self::orologio($inizio) . '] ', false, false, true);
+            // Con «a ogni battuta» ogni paragrafo è una battuta sola, quindi
+            // il marcatore si scrive nello stesso posto: in testa.
+            if ($this->tempi !== 'no' && $inizio !== null) {
+                // Lo spazio sta fuori dal tratto a spaziatura fissa: dentro,
+                // il Markdown lo renderebbe come parte del codice.
+                $tratti[] = new Testo('[' . self::orologio($inizio) . ']', false, false, true);
+                $tratti[] = new Testo(' ');
             }
             if ($parlante !== '') {
                 $tratti[] = new Testo($parlante . ': ', true);
@@ -136,24 +159,29 @@ final class LettoreTrascrizione implements Lettore
                 }
 
                 $inizio ??= $secondi;
+
+                // Il taglio si decide parola per parola, non battuta per
+                // battuta: una trascrizione incollata può arrivare come una
+                // battuta sola lunga quanto il video, e un controllo fatto
+                // solo alla fine della battuta non la spezzerebbe mai.
                 foreach (preg_split('~\s+~u', trim($testo)) ?: [] as $parola) {
-                    if ($parola !== '') {
-                        $paragrafo[] = $parola;
+                    if ($parola === '') {
+                        continue;
+                    }
+                    $paragrafo[] = $parola;
+
+                    if ($this->raggruppa !== 'periodi') {
+                        continue;
+                    }
+                    $chiuso = preg_match('~[.!?…]["»”\')\]]?$~u', $parola) === 1;
+                    if (count($paragrafo) >= self::PAROLE_MASSIME
+                        || ($chiuso && count($paragrafo) >= self::PAROLE_MINIME)) {
+                        $chiudi();
+                        $inizio = $secondi;
                     }
                 }
 
                 if ($this->tempi === 'battuta' || $this->raggruppa === 'battuta') {
-                    $chiudi();
-                    return;
-                }
-
-                if ($this->raggruppa === 'parlante') {
-                    return;   // chiude solo quando cambia chi parla
-                }
-
-                $chiuso = preg_match('~[.!?…:]["»”\')\]]?$~u', trim($testo)) === 1;
-                if (count($paragrafo) >= self::PAROLE_MASSIME
-                    || ($chiuso && count($paragrafo) >= self::PAROLE_MINIME)) {
                     $chiudi();
                 }
             }
@@ -211,42 +239,93 @@ final class LettoreTrascrizione implements Lettore
             if (!mb_check_encoding($riga, 'UTF-8')) {
                 $riga = mb_convert_encoding($riga, 'UTF-8', 'Windows-1252');
             }
-            $nuda = trim($riga);
-
-            if ($saltoFino) {
-                $saltoFino = $nuda !== '';
-                continue;
+            foreach ($this->spezzaOrari($riga) as $pezzo) {
+                $this->unaRiga($pezzo, $secondi, $righe, $saltoFino, $emetti);
             }
-            if ($nuda === '') {
-                $emetti();
-                continue;
-            }
-            if (preg_match('~^(WEBVTT|NOTE|STYLE|REGION)\b~', $nuda) === 1) {
-                $saltoFino = true;
-                continue;
-            }
-            if (preg_match(self::INTERVALLO, $nuda, $m) === 1) {
-                $emetti();
-                $secondi = self::secondi($m[1]);
-                continue;
-            }
-            // Il numero di battuta dell'SRT: sta da solo, prima dei tempi.
-            if ($righe === [] && $secondi === null && preg_match('~^\d{1,6}$~', $nuda) === 1) {
-                continue;
-            }
-            if (preg_match(self::SOLO_TEMPO, $nuda, $m) === 1) {
-                $emetti();
-                $secondi = self::secondi($m[1]);
-                if (($m[2] ?? '') !== '') {
-                    $righe[] = $m[2];
-                }
-                continue;
-            }
-
-            $righe[] = $nuda;
         }
         $emetti();
         fclose($f);
+    }
+
+    /**
+     * Una riga sola, dentro la macchina a stati.
+     *
+     * @param list<string> $righe
+     */
+    private function unaRiga(string $riga, ?float &$secondi, array &$righe, bool &$saltoFino, callable $emetti): void
+    {
+        $nuda = trim($riga);
+
+        if ($saltoFino) {
+            $saltoFino = $nuda !== '';
+            return;
+        }
+        if ($nuda === '') {
+            $emetti();
+            return;
+        }
+        if (preg_match('~^(WEBVTT|NOTE|STYLE|REGION)\b~', $nuda) === 1) {
+            $saltoFino = true;
+            return;
+        }
+        if (preg_match(self::INTERVALLO, $nuda, $m) === 1) {
+            $emetti();
+            $secondi = self::secondi($m[1]);
+            return;
+        }
+        // Il numero di battuta dell'SRT: sta da solo, prima dei tempi.
+        if ($righe === [] && $secondi === null && preg_match('~^\d{1,6}$~', $nuda) === 1) {
+            return;
+        }
+        if (preg_match(self::SOLO_TEMPO, $nuda, $m) === 1) {
+            $emetti();
+            $secondi = self::secondi($m[1]);
+            if (($m[2] ?? '') !== '') {
+                $righe[] = $m[2];
+            }
+            return;
+        }
+
+        $righe[] = $nuda;
+    }
+
+    /**
+     * Spezza una riga dove il tempo è appiccicato al testo.
+     *
+     * La trascrizione copiata dal pannello di YouTube arriva **tutta su una
+     * riga**: nessun a capo fra una battuta e l'altra. Senza tagliarla, l'intero
+     * video diventa una battuta sola — e da una battuta sola esce un paragrafo
+     * solo, lungo quanto il video.
+     *
+     * @return list<string> righe finte, come se il file le avesse davvero
+     */
+    private function spezzaOrari(string $riga): array
+    {
+        if (preg_match(self::ORARIO_INCOLLATO, $riga) !== 1) {
+            return [$riga];
+        }
+
+        $pezzi = preg_split(self::ORARIO_INCOLLATO, $riga, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($pezzi === false) {
+            return [$riga];
+        }
+
+        // preg_split coi gruppi restituisce: testo, tempo, etichetta, testo, …
+        $righe = [];
+        $primo = array_shift($pezzi);
+        if (trim((string) $primo) !== '') {
+            $righe[] = (string) $primo;
+        }
+        while ($pezzi !== []) {
+            $righe[] = (string) array_shift($pezzi);   // il tempo, da solo
+            array_shift($pezzi);                       // l'etichetta parlata: si butta
+            $testo = (string) array_shift($pezzi);
+            if (trim($testo) !== '') {
+                $righe[] = $testo;
+            }
+        }
+
+        return $righe;
     }
 
     /**
