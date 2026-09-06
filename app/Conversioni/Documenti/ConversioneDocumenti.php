@@ -17,6 +17,9 @@ final class ConversioneDocumenti implements Conversione
     /** Oltre questa dimensione il documento non sta nella memoria dell'hosting. */
     public const MAX_BYTE = 15 * 1024 * 1024;
 
+    /** Quanti blocchi mostrare nell'anteprima del risultato. */
+    private const BLOCCHI_ANTEPRIMA = 40;
+
     public static function chiave(): string
     {
         return 'documenti_md';
@@ -105,9 +108,18 @@ final class ConversioneDocumenti implements Conversione
 
         // Lettore e scrittore lavorano in catena: la memoria non dipende dalla
         // lunghezza del documento, che è l'unico modo di stare nel tetto.
-        $blocchi = 0;
-        $documento->consuma(static function ($blocco) use ($scrittore, &$blocchi, $avvisa): void {
+        $blocchi  = 0;
+        $primi    = [];
+        $documento->consuma(static function ($blocco) use ($scrittore, &$blocchi, &$primi, $avvisa): void {
             $scrittore->blocco($blocco);
+
+            // I primi blocchi si tengono da parte per l'anteprima: sono pochi,
+            // e mostrarli è l'unico modo di far vedere il risultato di un
+            // formato binario senza riaprirlo.
+            if (count($primi) < self::BLOCCHI_ANTEPRIMA) {
+                $primi[] = $blocco;
+            }
+
             $blocchi++;
             if ($blocchi % 200 === 0) {
                 $avvisa('scrittura', $blocchi, 0);
@@ -144,7 +156,11 @@ final class ConversioneDocumenti implements Conversione
             'pagine'        => $documento->quanti(),
             'intestazione'  => ['parole' => $documento->parole()],
             'anomalie'      => $this->anomalie($documento, $formato),
-            'anteprima'     => $this->anteprima($documento, $formato, $conZip),
+            'anteprima'     => $this->anteprima($documento, $formato, $conZip)
+                + [
+                    'html'    => AnteprimaHtml::rendi($primi),
+                    'parziale' => $documento->quanti() > count($primi),
+                ],
         ];
     }
 

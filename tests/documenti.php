@@ -182,6 +182,50 @@ $risultato = $conversione->converti($sorgente, $tmp . '/finale.md', ['formato' =
 vero('la conversione rende dei blocchi', $risultato['righe_scritte'] > 0);
 verifica('senza immagini non si impacchetta', 'md', $risultato['estensione']);
 
+// ── Anteprima del risultato ──────────────────────────────────────────────────
+$conAnteprima = $conversione->converti($sorgente, $tmp . '/ap.docx', ['formato' => 'docx']);
+$html = $conAnteprima['anteprima']['html'] ?? '';
+
+vero('l\'anteprima rende i titoli', str_contains($html, '<h1 class="ap-t1">Titolo primo</h1>'));
+vero('l\'anteprima rende il grassetto', str_contains($html, '<strong>grassetto</strong>'));
+vero('l\'anteprima rende gli elenchi come liste', str_contains($html, '<ul><li>primo</li>'));
+vero('l\'anteprima rende le tabelle', str_contains($html, '<table class="table"><thead>'));
+vero('l\'anteprima rende le citazioni', str_contains($html, '<blockquote>'));
+verifica('un documento corto non è parziale', false, $conAnteprima['anteprima']['parziale']);
+
+// Il testo arriva da un file caricato da qualcuno: nell'anteprima non deve
+// poter diventare marcatura. È la verifica che conta più di tutte le altre.
+$cattivo = $tmp . '/cattivo.md';
+file_put_contents(
+    $cattivo,
+    '# <script>alert(1)</script>' . PHP_EOL . PHP_EOL
+    . 'Un paragrafo con <img src=x onerror=alert(2)> e "virgolette".' . PHP_EOL
+);
+$conCattivo = $conversione->converti($cattivo, $tmp . '/cattivo.md.docx', ['formato' => 'docx']);
+$htmlCattivo = $conCattivo['anteprima']['html'] ?? '';
+
+// La prova giusta non è cercare le parole pericolose — «onerror» compare
+// eccome, ma dentro «&lt;img … &gt;», dove è testo inerte. La prova è che gli
+// UNICI tag presenti siano quelli che emettiamo noi: se ne spunta uno che non
+// è nella lista, vuol dire che il contenuto del file è diventato marcatura.
+$nostri = ['h1','h2','h3','h4','h5','h6','p','ul','ol','li','blockquote','pre','code',
+           'strong','em','hr','table','thead','tbody','tr','th','td','span'];
+preg_match_all('~</?([a-zA-Z][a-zA-Z0-9]*)~', $htmlCattivo, $trovati);
+$intrusi = array_values(array_unique(array_diff(array_map('strtolower', $trovati[1]), $nostri)));
+verifica('nessun tag estraneo nell\'anteprima', [], $intrusi);
+
+vero('il testo pericoloso resta visibile, ma protetto', str_contains($htmlCattivo, '&lt;script&gt;'));
+vero('le virgolette sono protette', str_contains($htmlCattivo, '&quot;'));
+
+// Un documento lungo si taglia, e lo dice.
+$lungo = $tmp . '/lungo.md';
+file_put_contents($lungo, str_repeat("Paragrafo di riempimento.
+
+", 80));
+$conLungo = $conversione->converti($lungo, $tmp . '/lungo.md.md', ['formato' => 'md']);
+verifica('un documento lungo è dichiarato parziale', true, $conLungo['anteprima']['parziale']);
+vero('l\'anteprima non contiene tutti gli 80 paragrafi', substr_count((string) $conLungo['anteprima']['html'], '<p>') < 80);
+
 // ── Il vincolo di memoria vale anche qui ─────────────────────────────────────
 if (function_exists('memory_reset_peak_usage')) {
     memory_reset_peak_usage();

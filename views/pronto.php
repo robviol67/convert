@@ -113,6 +113,22 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
     </div>
   </div>
 
+  <?php if (!empty($anteprima['html'])): ?>
+    <div style="margin-top:var(--space-8)">
+      <div class="tra" style="margin-bottom:var(--space-3)">
+        <p class="kick" style="margin:0">Anteprima del risultato</p>
+        <span class="mono muted" style="font-size:12.5px">
+          quello che la conversione ha capito, non un'immagine del file
+        </span>
+      </div>
+      <div class="ap"><?= $anteprima['html'] ?>
+        <?php if (!empty($anteprima['parziale'])): ?>
+          <p class="ap-coda">… il file scaricato contiene tutto il documento.</p>
+        <?php endif; ?>
+      </div>
+    </div>
+  <?php endif; ?>
+
   <div class="foot">
     <span class="mono" style="color:rgba(32,30,29,.5)">job #<?= Vista::e($job['riferimento']) ?> · <?= Vista::e(Vista::tipologia((string) $job['tipologia'])) ?> · <?= Vista::e($utente['nome']) ?></span>
     <a href="?p=storico" style="font-size:14px">Vedi nello storico</a>

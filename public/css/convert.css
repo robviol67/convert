@@ -174,6 +174,71 @@ body.trascina .sh > *:not(.body), body.trascina .body > *:not(.wizard) { opacity
 }
 .avviso.buono { background: var(--color-accent-100); border-left-color: var(--color-accent); }
 
+/* ── anteprima del risultato ─────────────────────────────────────────── */
+/* Il documento convertito, reso a schermo. Non imita il formato di uscita —
+   sarebbe una bugia, un .docx non si vede in una pagina — ma mostra quello che
+   la conversione ha capito: titoli, elenchi, tabelle, tratti. */
+.ap {
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  max-height: 460px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ap > *:first-child { margin-top: 0; }
+.ap p { margin: 0 0 var(--space-3); }
+.ap h1, .ap h2, .ap h3, .ap h4, .ap h5, .ap h6 {
+  font-family: var(--font-heading);
+  letter-spacing: -.01em;
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-accent-800);
+}
+.ap h1 { font-size: 24px; }
+.ap h2 { font-size: 20px; }
+.ap h3 { font-size: 17px; }
+.ap h4, .ap h5, .ap h6 { font-size: 15px; }
+.ap ul, .ap ol { margin: 0 0 var(--space-3); padding-left: var(--space-4); }
+.ap li { margin: 2px 0; }
+.ap li.ap-rientro { margin-left: var(--space-3); }
+.ap blockquote {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-neutral-300);
+  color: rgba(32,30,29,.68);
+  font-style: italic;
+}
+.ap pre {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-neutral-100);
+  font: 400 12.5px/1.5 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.ap code { font: 400 12.5px ui-monospace, Menlo, monospace; background: var(--color-neutral-100); padding: 1px 3px; }
+.ap pre code { background: none; padding: 0; }
+.ap hr { border: none; border-top: 1px solid var(--color-divider); margin: var(--space-4) 0; }
+.ap table { width: 100%; margin: 0 0 var(--space-3); font-size: 13px; }
+/* Un collegamento in anteprima si vede ma non si segue: l'indirizzo viene da
+   un file altrui e questa è una pagina dell'applicazione. */
+.ap .ap-link { color: var(--color-accent-700); border-bottom: 1px solid var(--color-accent-300); cursor: help; }
+.ap .ap-immagine {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-neutral-400);
+  color: rgba(32,30,29,.55);
+  font-size: 13px;
+}
+.ap-coda {
+  text-align: center;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-divider);
+  color: rgba(32,30,29,.45);
+  font-size: 13px;
+}
+
 /* ── utilita' ────────────────────────────────────────────────────────── */
 .riga { display: flex; align-items: center; gap: var(--space-2); }
 .tra { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
