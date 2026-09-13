@@ -6,33 +6,25 @@ namespace Vblite\Convert\Conversioni\OctoScidoo;
 use Smalot\PdfParser\Parser as PdfParser;
 
 /**
- * Estrae le righe-ospite dalla «Stampa clienti presenti» di Octorate.
+ * Estrae le righe di una stampa Octorate.
  *
- * La stampa e' una tabella a colonne fisse con quattro righe logiche per ospite.
+ * La stampa e' una tabella a colonne fisse con piu' righe logiche per record.
  * Anziche' leggere il testo impaginato (fragile), ricostruiamo le colonne dalle
  * coordinate: le intestazioni si ripetono su ogni pagina e danno gli ancoraggi.
+ *
+ * Le stampe che sappiamo leggere sono due e hanno colonne diverse, ma lo stesso
+ * impianto: quale sia si riconosce dal titolo a pagina 1, e quello che cambia
+ * lo dichiara il Tracciato. Il motore qui sotto e' uno solo.
  */
 final class Parser
 {
-    /** Intestazioni della prima riga di testata, in ordine di colonna. */
-    private const ANCORE = [
-        'npren'       => 'N°pren.',
-        'cognome'     => 'Cognome',
-        'arrivo'      => 'Arrivo',
-        'camera'      => 'Cam.',
-        'pax'         => null,          // «P a x» su tre righe: interpolato
-        'gruppo'      => 'Gruppo',
-        'trattamento' => 'Trattamento',
-        'importo'     => 'Importo',
-        'supplementi' => 'Supplementi',
-        'commenti'    => 'Commenti',
-        'caparre'     => 'Caparre',
-    ];
-
-    /** Passo verticale fra le quattro righe logiche di un record. */
+    /** Passo verticale fra le righe logiche di un record. */
     private const PASSO_RIGA = 10.2;
 
     private ?\Closure $progresso = null;
+
+    /** Quale stampa si sta leggendo: la decide la prima pagina. */
+    private ?Tracciato $tracciato = null;
 
     /** @param callable(int,int):void|null $progresso pagina corrente, totale */
     public function __construct(?callable $progresso = null)
@@ -61,7 +53,12 @@ final class Parser
             self::liberaPagina($pagina);
 
             if ($indice === 0) {
-                $intestazione = $this->leggiTestata($chunk);
+                $testo = implode(' ', array_column($chunk, 't'));
+                $this->tracciato = Tracciato::riconosci($testo);
+                if ($this->tracciato === null) {
+                    throw new \RuntimeException('Non riconosco questa stampa: accetto ' . Tracciato::nomi() . '.');
+                }
+                $intestazione = $this->leggiTestata($chunk) + ['stampa' => $this->tracciato->nome];
             }
 
             $colonne = $this->bandeColonne($chunk);
@@ -103,10 +100,12 @@ final class Parser
         $chunk = $this->chunkOrdinati($pagine[0]->getDataTm());
         $testo = implode(' ', array_map(static fn(array $c): string => $c['t'], $chunk));
 
-        if (!str_contains($testo, 'Stampa clienti presenti')) {
+        $this->tracciato = Tracciato::riconosci($testo);
+        if ($this->tracciato === null) {
             return [
                 'ok' => false,
-                'motivo' => 'Non è una stampa clienti',
+                'motivo' => 'Non è una stampa Octorate di quelle che leggo: accetto ' . Tracciato::nomi()
+                    . '. Se quella che hai è un\'altra stampa, dimmelo: il metodo è lo stesso.',
                 'pagine' => count($pagine),
                 'intestazione' => [],
             ];
@@ -114,7 +113,8 @@ final class Parser
         if ($this->bandeColonne($chunk) === null) {
             return [
                 'ok' => false,
-                'motivo' => 'Colonne della stampa non riconosciute',
+                'motivo' => 'È una «' . $this->tracciato->nome . '», ma non ne riconosco le colonne: '
+                    . 'la testata è diversa da quella attesa.',
                 'pagine' => count($pagine),
                 'intestazione' => [],
             ];
@@ -124,7 +124,7 @@ final class Parser
             'ok' => true,
             'motivo' => null,
             'pagine' => count($pagine),
-            'intestazione' => $this->leggiTestata($chunk),
+            'intestazione' => $this->leggiTestata($chunk) + ['stampa' => $this->tracciato->nome],
         ];
     }
 
@@ -205,35 +205,66 @@ final class Parser
      */
     private function bandeColonne(array $chunk): ?array
     {
+        $ancore = $this->tracciato?->ancore ?? [];
+        if ($ancore === []) {
+            return null;
+        }
+
+        // Prima si cerca la colonna del numero: la sua e' la riga di testata, e
+        // da li' in poi si accettano solo ancore che stiano su quella riga.
+        // Senza questo vincolo un'etichetta di una lettera sola — la «A» di
+        // «Adulti» — si farebbe riconoscere in mezzo al testo di un'altra riga.
         $x  = [];
         $y0 = null;
-
         foreach ($chunk as $c) {
+            if (trim($c['t']) === $ancore['npren']) {
+                $x['npren'] = $c['x'];
+                $y0         = $c['y'];
+                break;
+            }
+        }
+        if ($y0 === null) {
+            return null;
+        }
+
+        // Mezza riga di tolleranza, non meno: sulla stampa clienti le ultime tre
+        // intestazioni sono stampate 3,4 punti piu' in basso delle altre, e con
+        // un margine stretto sparivano — e con loro tutta la tabella.
+        foreach ($chunk as $c) {
+            if (abs($c['y'] - $y0) > self::PASSO_RIGA / 2) {
+                continue;
+            }
             $t = trim($c['t']);
-            foreach (self::ANCORE as $chiave => $etichetta) {
+            foreach ($ancore as $chiave => $etichetta) {
                 if ($etichetta !== null && $t === $etichetta && !isset($x[$chiave])) {
                     $x[$chiave] = $c['x'];
-                    if ($chiave === 'npren') {
-                        $y0 = $c['y'];
-                    }
                 }
             }
         }
 
-        // «Pax» e' stampato in verticale (P / a / x): lo si prende dalla «P» isolata
-        // sulla riga di testata, con ripiego a meta' fra Cam. e Gruppo.
-        if (isset($x['camera'], $x['gruppo']) && $y0 !== null) {
+        $chiavi = array_keys($ancore);
+
+        // Un'ancora dichiarata senza etichetta e' stampata in verticale — il
+        // «Pax» della stampa clienti e' una P, una a e una x su tre righe — e
+        // come etichetta non si puo' cercare. Si prende quel che c'e' fra le
+        // due colonne vicine, e se non c'e' niente si sta nel mezzo.
+        foreach ($chiavi as $i => $chiave) {
+            if ($ancore[$chiave] !== null || isset($x[$chiave])) {
+                continue;
+            }
+            $prima = $chiavi[$i - 1] ?? null;
+            $dopo  = $chiavi[$i + 1] ?? null;
+            if ($prima === null || $dopo === null || !isset($x[$prima], $x[$dopo])) {
+                continue;
+            }
             foreach ($chunk as $c) {
-                if (trim($c['t']) === 'P' && abs($c['y'] - $y0) < 1
-                    && $c['x'] > $x['camera'] && $c['x'] < $x['gruppo']) {
-                    $x['pax'] = $c['x'];
+                if (abs($c['y'] - $y0) < 1 && $c['x'] > $x[$prima] && $c['x'] < $x[$dopo]) {
+                    $x[$chiave] = $c['x'];
                     break;
                 }
             }
-            $x['pax'] ??= ($x['camera'] + $x['gruppo']) / 2;
+            $x[$chiave] ??= ($x[$prima] + $x[$dopo]) / 2;
         }
-
-        $chiavi = array_keys(self::ANCORE);
         foreach ($chiavi as $chiave) {
             if (!isset($x[$chiave])) {
                 return null; // testata incompleta: pagina non tabellare
@@ -260,7 +291,7 @@ final class Parser
     private function righePagina(array $chunk, array $colonne, int $numeroPagina): array
     {
         $limiti = $colonne['limiti'];
-        $sottoTestata = $colonne['y0'] - 3 * self::PASSO_RIGA - 4;
+        $sottoTestata = $colonne['y0'] - ($this->tracciato->righeTestata - 1) * self::PASSO_RIGA - 4;
 
         // 1. individua gli inizi di record
         $inizi = [];
@@ -372,34 +403,23 @@ final class Parser
             }
         }
 
-        return [
-            'npren'             => $npren,
-            'data'              => $sub($celle, 'npren', 1),
-            'ora'               => $sub($celle, 'npren', 2),
-            'cognome'           => $cognome,
-            'nome'              => $nome,
-            'telefono'          => $telefono,
-            'email'             => $email,
-            'arrivo'            => $sub($celle, 'arrivo', 0),
-            'partenza'          => $sub($celle, 'arrivo', 1),
-            'camera'            => $sub($celle, 'camera', 0),
-            'camere_tot'        => $sub($celle, 'camera', 1),
-            'pax'               => $sub($celle, 'pax', 0),
-            'gruppo'            => $sub($celle, 'gruppo', 0),
-            'agenzia_pagante'   => $sub($celle, 'gruppo', 1),
-            'agenzia_prenotante'=> $sub($celle, 'gruppo', 2),
-            'voucher'           => $sub($celle, 'gruppo', 3),
-            'trattamento'       => $sub($celle, 'trattamento', 0),
-            'convenzione'       => $sub($celle, 'trattamento', 1),
-            'data_opzione'      => $sub($celle, 'trattamento', 2),
-            'importo'           => $sub($celle, 'importo', 0, true),
-            'tassa_sogg'        => $sub($celle, 'importo', 1, true),
-            'sconto'            => $sub($celle, 'importo', 2, true),
-            'supplementi'       => $tutte($celle, 'supplementi'),
-            'commenti'          => $tutte($celle, 'commenti'),
-            'caparre'           => $sub($celle, 'caparre', 0, true),
-            'acconti'           => $sub($celle, 'caparre', 1, true),
-            'pagina'            => (string) $numeroPagina,
-        ];
+        // Il resto delle colonne lo dichiara il tracciato: campo, banda e
+        // quale delle righe logiche del record. È l'unico punto in cui le due
+        // stampe divergono davvero.
+        $riga = Tracciato::rigaVuota();
+        $riga['npren']    = $npren;
+        $riga['cognome']  = $cognome;
+        $riga['nome']     = $nome;
+        $riga['telefono'] = $telefono;
+        $riga['email']    = $email;
+        $riga['pagina']   = (string) $numeroPagina;
+
+        foreach ($this->tracciato->campi as $campo => $dove) {
+            $riga[$campo] = $dove[1] === 'tutte'
+                ? $tutte($celle, $dove[0])
+                : $sub($celle, $dove[0], (int) $dove[1], ($dove[2] ?? '') === 'num');
+        }
+
+        return $riga;
     }
 }

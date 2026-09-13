@@ -11,18 +11,20 @@ use Vblite\Convert\Conversioni\OctoScidoo\ScrittoreScidoo;
 return [
     'chiave'      => 'octo_scidoo',
     'titolo'      => 'Octo → Scidoo',
-    'sottotitolo' => 'Stampa prenotazioni Octorate (PDF) → File Import Prenotazioni (XLSX)',
+    'sottotitolo' => 'Le stampe di Octorate (PDF) → File Import Prenotazioni (XLSX)',
     'attiva'      => true,
-    'descrizione' => 'Converte la stampa prenotazioni del gestionale <strong>Octorate</strong> nel tracciato di import di <strong>Scidoo</strong>, raggruppando le righe ospite in una riga per prenotazione.',
+    'descrizione' => 'Converte le stampe del gestionale <strong>Octorate</strong> nel tracciato di import di <strong>Scidoo</strong>. Riconosce da sé quale delle due stampe le hai dato: la <em>Stampa clienti presenti</em>, che ha una riga per ospite e viene raggruppata per prenotazione, oppure la <em>Stampa prenotazioni</em>, che ne ha già una per prenotazione. Il file in uscita è lo stesso in tutti e due i casi.',
 
     'si_puo' => [
-        '<em>Stampa clienti presenti</em> di Octorate, in PDF, con la testata e le 23 colonne originali',
+        '<em>Stampa clienti presenti</em>, in PDF, con la testata e le 23 colonne originali',
+        '<em>Stampa prenotazioni</em>, in PDF: la riconosce da sé, non devi dire quale sia',
         'Qualunque periodo, anche pluriennale',
         'Prenotazioni dirette e da OTA: Booking.com, Quick Booking, Expedia',
         'Gruppi con più ospiti sullo stesso N°pren.',
+        'Dalla <em>Stampa prenotazioni</em> arrivano anche telefono, e-mail, data d\'inserimento e scadenza dell\'opzione',
     ],
     'non_si_puo' => [
-        'Altre stampe Octorate (listini, disponibilità, statistiche)',
+        'Le altre stampe Octorate (listini, disponibilità, statistiche): se te ne serve una, si aggiunge',
         'PDF ritagliati, uniti a mano o stampati con colonne nascoste',
         'Fotografie o scansioni storte della stampa',
         'File già in Excel: il tracciato si costruisce dal PDF',
@@ -30,7 +32,7 @@ return [
 
     'specifiche' => [
         'Ingresso'      => 'PDF · max 50 MB · 500 pagine',
-        'Colonne lette' => '23',
+        'Colonne lette' => '23 · 25',
         'Uscita'        => 'XLSX · 32 colonne · o CSV',
         'Granularità'   => '1 riga = 1 prenotazione',
         'Motore'        => 'deterministico',
@@ -38,9 +40,10 @@ return [
     ],
 
     'eccezioni' => [
-        ['titolo' => 'Categoria Camera non esiste in Octorate.', 'testo' => 'Si deduce dai Commenti («Camera Matrimoniale – Single Use») solo se attivi la regola opzionale; altrimenti esce vuota.'],
+        ['titolo' => 'Le due stampe si riconoscono dal titolo.', 'testo' => 'Quello che cambia sono le colonne, non il metodo: le bande si ricavano sempre dalle coordinate della testata. Se carichi una stampa che non è nessuna delle due, viene detto quali si accettano.'],
+        ['titolo' => 'Categoria Camera dipende dalla stampa.', 'testo' => 'La <em>Stampa prenotazioni</em> la dichiara nella colonna Tipo camera e si prende quella. La <em>Stampa clienti presenti</em> non ce l\'ha: si deduce dai Commenti solo se attivi la regola opzionale, altrimenti esce vuota.'],
         ['titolo' => 'Importi solo sulla riga capofila.',        'testo' => 'Nel gruppo, Importo, Supplementi, Caparre e Acconti stanno sulla prima riga: vengono portati sulla prenotazione, non divisi per ospite.'],
-        ['titolo' => 'Fasce d\'età non dichiarate.',              'testo' => 'Octorate non distingue adulti e bambini: gli adulti sono le righe ospite del gruppo. Il supplemento «Letto agg. Bambino» può contare un bambino, ma solo se attivi la regola opzionale — nel file di esempio compare in quasi tutte le prenotazioni, comprese quelle da un solo ospite.'],
+        ['titolo' => 'Le fasce d\'età dipendono dalla stampa.', 'testo' => 'La <em>Stampa prenotazioni</em> le dichiara in tre colonne — A, B, I — e allora si leggono e basta. Nella <em>Stampa clienti presenti</em> non ci sono: gli adulti sono le righe ospite del gruppo, e il supplemento «Letto agg. Bambino» può contare un bambino solo se attivi la regola opzionale.'],
         ['titolo' => 'Telefoni troncati.',                       'testo' => 'La stampa taglia la colonna Telefono («349 674»): il numero incompleto si segnala, non si inventa.'],
         ['titolo' => 'Commenti OTA con tag HTML.',               'testo' => 'Booking ed Expedia stampano <span class="mono">&amp;lt;b&amp;gt;</span> e a capo dentro il testo; il commento è ripetuto su ogni ospite del gruppo e va tenuto solo sull\'intestatario.'],
         ['titolo' => 'Tassa soggiorno, Sconto e Convenzione',    'testo' => 'non hanno colonna nel tracciato Scidoo: finiscono trascritte in Note.'],
@@ -96,7 +99,7 @@ return [
     ],
     'invito_upload'       => "Trascina il PDF in quest'area",
     'titolo_upload'       => 'Carica la stampa Octorate',
-    'lede_upload'         => 'Serve l\'export <em>Stampa clienti presenti</em>, in PDF, esattamente come lo produce Octorate — niente ritagli né stampe parziali.',
+    'lede_upload'         => 'Va bene la <em>Stampa clienti presenti</em> o la <em>Stampa prenotazioni</em>, in PDF, esattamente come le produce Octorate — niente ritagli né stampe parziali. Quale delle due sia lo capisce da sola.',
     'titolo_eccezioni'    => 'Le sette eccezioni note di questo tracciato',
     'titolo_colonne'      => 'Colonne in uscita',
     'titolo_regole'       => 'Regole di conversione · 23 colonne Octorate → 32 colonne Scidoo',

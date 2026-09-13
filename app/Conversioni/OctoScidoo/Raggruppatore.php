@@ -150,6 +150,15 @@ final class Raggruppatore
         // --- Commenti ---
         [$note, $noteOta, $categoria] = $this->note($npren, $cliente, $ospiti);
 
+        // La «Stampa prenotazioni» il tipo di camera lo dichiara. Dove c'è
+        // scritto, quello scritto vince su qualunque deduzione dai commenti.
+        foreach ($ospiti as $ospite) {
+            if (trim((string) ($ospite['tipo_camera'] ?? '')) !== '') {
+                $categoria = trim((string) $ospite['tipo_camera']);
+                break;
+            }
+        }
+
         // --- Contatti dell'intestatario ---
         $telefono = Normalizza::telefono($capofila['telefono']);
         if ($telefono['troncato']) {
@@ -180,7 +189,7 @@ final class Raggruppatore
         // --- Voci senza colonna nel tracciato ---
         $extra = [];
         foreach (['tassa_sogg' => 'Tassa sogg', 'sconto' => 'Sconto', 'convenzione' => 'Convenzione'] as $campo => $etichetta) {
-            $valore = trim($capofila[$campo]);
+            $valore = trim((string) ($capofila[$campo] ?? ''));
             if ($valore !== '') {
                 $extra[] = "{$etichetta}: {$valore}";
             }
@@ -303,6 +312,23 @@ final class Raggruppatore
      */
     private function fasceEta(string $npren, string $cliente, array $ospiti): array
     {
+        // Sulla «Stampa prenotazioni» le tre fasce stanno in tre colonne loro —
+        // A, B, I — e allora non c'e' niente da dedurre: si leggono. È il
+        // motivo principale per cui quella stampa e' una sorgente migliore.
+        $dichiarate = false;
+        $fasce      = [0, 0, 0];
+        foreach ($ospiti as $ospite) {
+            foreach (['adulti', 'bambini', 'neonati'] as $i => $campo) {
+                if (trim((string) ($ospite[$campo] ?? '')) !== '') {
+                    $dichiarate = true;
+                    $fasce[$i] += (int) $ospite[$campo];
+                }
+            }
+        }
+        if ($dichiarate) {
+            return $fasce;
+        }
+
         $totale = count($ospiti);
 
         $paxDichiarati = 0;
