@@ -2,6 +2,7 @@
 /**
  * 2f — Pronto. Nessuna scadenza: il file resta finche' non lo si cancella.
  * @var array<string,mixed> $job
+ * @var int $daRivedere
  * @var array{testate:list<string>,righe:list<list<string>>} $anteprima
  */
 use Vblite\Convert\Config;
@@ -73,9 +74,9 @@ $linkDiretto = Config::baseUrl() . '/?p=scarica&job=' . $job['riferimento'];
           </div>
         <?php endforeach; ?>
         <div>
-          <div style="font:600 42px/0.9 var(--font-heading);color:var(--color-accent-2-700)"><?= Vista::numero(count($anomalie)) ?></div>
+          <div style="font:600 42px/0.9 var(--font-heading);color:var(--color-accent-2-700)"><?= Vista::numero($daRivedere) ?></div>
           <div style="font-size:14px;color:rgba(32,30,29,.6);margin-top:8px">
-            <?php if ($anomalie !== []): ?>
+            <?php if ($daRivedere > 0): ?>
               <a href="?p=rivedere&amp;job=<?= Vista::e($job['riferimento']) ?>" style="color:var(--color-accent-2-700)">da rivedere</a>
             <?php else: ?>
               da rivedere

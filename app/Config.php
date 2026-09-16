@@ -33,6 +33,12 @@ final class Config
         return self::radice() . '/storage/out';
     }
 
+    /** Il lavoro a metà delle conversioni a tappe, fra una richiesta e l'altra. */
+    public static function cartellaLavoro(): string
+    {
+        return getenv('CONVERT_LAVORO') ?: self::radice() . '/storage/lavoro';
+    }
+
     /** URL base dell'applicazione, per i link assoluti (copia link). */
     public static function baseUrl(): string
     {

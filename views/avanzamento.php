@@ -1,9 +1,15 @@
 <?php
 /**
- * 2e — Conversione in corso. Il job gira in un processo distaccato: questa
- * pagina interroga ?p=stato una volta al secondo e si puo' lasciare.
+ * 2e — Conversione in corso. Questa pagina interroga ?p=stato una volta al
+ * secondo. Dove il job gira in un processo distaccato si può lasciare; dove
+ * lavora a tappe è proprio questa pagina a portarlo avanti, e va detto.
  * @var array<string,mixed> $job
+ * @var bool $conLaPagina
  */
+$avviso = !empty($conLaPagina)
+    ? 'Tieni aperta questa pagina: su questo server la conversione avanza mentre la guardi. '
+      . 'Se la chiudi si ferma, e riprende da dove era quando la riapri dallo storico.'
+    : 'Puoi lasciare questa pagina: la trovi nello storico quando è pronta.';
 use Vblite\Convert\Auth;
 use Vblite\Convert\Vista;
 
@@ -21,9 +27,7 @@ require __DIR__ . '/parti/passi.php';
         <span class="paper">0%</span><span class="plate plate-c" aria-hidden="true">0%</span>
       </div>
       <h2 class="h2" id="posizione" style="font-size:26px;margin-top:var(--space-6)">In coda…</h2>
-      <p class="lede" id="dettaglio" style="font-size:16px">
-        Puoi lasciare questa pagina: la trovi nello storico quando è pronta.
-      </p>
+      <p class="lede" id="dettaglio" style="font-size:16px"><?= Vista::e($avviso) ?></p>
       <div class="barra" style="margin-top:var(--space-6);max-width:420px"><i id="barra" style="width:0"></i></div>
       <form method="post" action="?p=annulla&amp;job=<?= Vista::e($job['riferimento']) ?>" style="margin-top:var(--space-6)">
         <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
@@ -114,7 +118,7 @@ require __DIR__ . '/parti/passi.php';
     if (s.righe_lette > 0) {
       document.getElementById('dettaglio').textContent =
         (s.righe_scritte || 0) + ' <?= Vista::e($lessico['unita_plurale']) ?> da ' + s.righe_lette + ' <?= Vista::e($lessico['origine']) ?>. '
-        + 'Puoi lasciare questa pagina: la trovi nello storico quando è pronta.';
+        + <?= json_encode($avviso, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
     }
 
     var trascorsi = Math.round((Date.now() - avvio) / 1000);

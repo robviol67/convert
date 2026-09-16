@@ -54,56 +54,86 @@ final class ScrittoreScidoo
      */
     public function scrivi(iterable $prenotazioni, string $percorso, string $formato = 'xlsx'): int
     {
-        return $formato === 'csv'
-            ? $this->scriviCsv($prenotazioni, $percorso)
-            : $this->scriviXlsx($prenotazioni, $percorso);
-    }
-
-    /** @param iterable<array<string,mixed>> $prenotazioni */
-    private function scriviCsv(iterable $prenotazioni, string $percorso): int
-    {
-        $f = fopen($percorso, 'w');
-        if ($f === false) {
-            throw new \RuntimeException("Non riesco a scrivere {$percorso}");
+        $this->apri($percorso, $formato);
+        foreach ($prenotazioni as $prenotazione) {
+            $this->aggiungi($prenotazione);
         }
 
-        fwrite($f, "\u{FEFF}");                       // BOM: Excel apra in UTF-8
-        fputcsv($f, array_merge([''], $this->testate()), ';', '"', '\\');
+        return $this->chiudi();
+    }
 
-        $scritte = 0;
-        foreach ($prenotazioni as $prenotazione) {
+    /** @var resource|null */
+    private $csv = null;
+
+    private ?FoglioXlsx $foglio = null;
+
+    private int $scritte = 0;
+
+    /**
+     * Apre il file per scriverci una prenotazione alla volta.
+     *
+     * Chi raggruppa da disco non ha mai tutte le prenotazioni in mano: le
+     * consegna man mano, e qui si scrivono man mano.
+     */
+    public function apri(string $percorso, string $formato = 'xlsx'): void
+    {
+        $this->scritte = 0;
+
+        if ($formato === 'csv') {
+            $f = fopen($percorso, 'w');
+            if ($f === false) {
+                throw new \RuntimeException("Non riesco a scrivere {$percorso}");
+            }
+            fwrite($f, "\u{FEFF}");                       // BOM: Excel apra in UTF-8
+            fputcsv($f, array_merge([''], $this->testate()), ';', '"', '\\');
+            $this->csv = $f;
+
+            return;
+        }
+
+        // La meccanica dell'XLSX — ordine degli elementi, stili, scrittura in
+        // streaming — sta in FoglioXlsx: qui resta solo il tracciato Scidoo.
+        $this->foglio = new FoglioXlsx();
+        $this->foglio->apri($percorso, $this->colonne, 2);   // la colonna A resta libera
+    }
+
+    /** @param array<string,mixed> $prenotazione */
+    public function aggiungi(array $prenotazione): void
+    {
+        if ($this->csv !== null) {
             $riga = [''];
             foreach ($this->colonne as $colonna) {
                 $riga[] = $this->testoCsv($prenotazione[$colonna['chiave']] ?? null, $colonna['tipo']);
             }
-            fputcsv($f, $riga, ';', '"', '\\');
-            $scritte++;
-        }
-        fclose($f);
-
-        return $scritte;
-    }
-
-    /**
-     * @param iterable<array<string,mixed>> $prenotazioni
-     * @return int righe scritte
-     */
-    private function scriviXlsx(iterable $prenotazioni, string $percorso): int
-    {
-        // La meccanica dell'XLSX — ordine degli elementi, stili, scrittura in
-        // streaming — sta in FoglioXlsx: qui resta solo il tracciato Scidoo.
-        $foglio = new FoglioXlsx();
-        $foglio->apri($percorso, $this->colonne, 2);   // la colonna A resta libera
-
-        foreach ($prenotazioni as $prenotazione) {
+            fputcsv($this->csv, $riga, ';', '"', '\\');
+        } elseif ($this->foglio !== null) {
             $riga = [];
             foreach ($this->colonne as $colonna) {
                 $riga[] = $prenotazione[$colonna['chiave']] ?? null;
             }
-            $foglio->riga($riga);
+            $this->foglio->riga($riga);
+        } else {
+            throw new \LogicException('Scrittore non aperto');
+        }
+        $this->scritte++;
+    }
+
+    public function chiudi(): int
+    {
+        if ($this->csv !== null) {
+            fclose($this->csv);
+            $this->csv = null;
+
+            return $this->scritte;
+        }
+        if ($this->foglio !== null) {
+            $scritte = $this->foglio->chiudi();
+            $this->foglio = null;
+
+            return $scritte;
         }
 
-        return $foglio->chiudi();
+        return 0;
     }
 
     private function testoCsv(mixed $valore, string $tipo): string

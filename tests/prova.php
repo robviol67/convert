@@ -78,6 +78,21 @@ vero('cellulare completo non e\' troncato', !$tel['troncato']);
 
 $corto = Normalizza::telefono('349 674');
 vero('telefono troncato segnalato', $corto['troncato']);
+verifica('e importato com\'è, perché si può completare', '349 674', $corto['mobile']);
+
+// La colonna della stampa taglia: dei numeri resta spesso solo il prefisso.
+$moncone = Normalizza::telefono('0341');
+verifica('un prefisso da solo non è un telefono', null, $moncone['fisso']);
+verifica('e non finisce nemmeno sul cellulare', null, $moncone['mobile']);
+verifica('ma resta scritto cosa è stato scartato', '0341', $moncone['scartato']);
+verifica('«06» è un moncone anche lui', '06', Normalizza::telefono('06')['scartato']);
+verifica('un fisso con lo spazio resta un fisso', '06 12345678', Normalizza::telefono('06 12345678')['fisso']);
+
+// Due numeri incollati sulla stessa riga: il «+» apre il secondo.
+$due = Normalizza::telefono('0341 +39 329 592 5969');
+verifica('il cellulare incollato dopo il prefisso si ritrova', '+39 329 592 5969', $due['mobile']);
+verifica('e il prefisso davanti non diventa un fisso', null, $due['fisso']);
+vero('il cellulare intero non è troncato', !$due['troncato']);
 
 verifica('agenzia OTA normalizzata', 'Booking.com', Normalizza::agenzia('BOOKING.COM', ''));
 verifica('agenzia dal prenotante se manca il pagante', 'Quick Booking', Normalizza::agenzia('', 'QUICK BOOKING'));
@@ -248,6 +263,17 @@ if (!is_file($pdf)) {
         static fn(array $a): bool => $a['chiave'] === '4.278' && str_contains($a['motivo'], 'troncato')
     );
     vero('4.278 segnalato per telefono troncato', $telefonoTroncato !== []);
+
+    // Nei nomi le cifre non ci stanno: se ci sono, è un pezzo di telefono
+    // finito nel posto sbagliato («STEFANO 349»). Succedeva in 70 righe.
+    $nomiConCifre = array_filter(
+        $estratto['righe'],
+        static fn(array $r): bool => preg_match('~\d~', $r['nome'] . $r['cognome']) === 1
+    );
+    verifica('nessun pezzo di telefono nei nomi', [], array_values(array_map(
+        static fn(array $r): string => $r['npren'] . ' ' . $r['cognome'] . ' ' . $r['nome'],
+        $nomiConCifre
+    )));
 
     // Di default i bambini non si deducono dai Supplementi: nel file di esempio
     // «Letto agg. Bambino» compare in quasi tutte le prenotazioni e non descrive

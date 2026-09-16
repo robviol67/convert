@@ -60,6 +60,18 @@ final class Tracciato
         return null;
     }
 
+    /** Per riprendere un lavoro a tappe: lo stato su disco ricorda solo la chiave. */
+    public static function perChiave(string $chiave): ?self
+    {
+        foreach (self::tutti() as $tracciato) {
+            if ($tracciato->chiave === $chiave) {
+                return $tracciato;
+            }
+        }
+
+        return null;
+    }
+
     /** I nomi delle stampe accettate, per i messaggi d'errore. */
     public static function nomi(): string
     {

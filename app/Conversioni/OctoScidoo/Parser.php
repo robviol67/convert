@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Vblite\Convert\Conversioni\OctoScidoo;
 
 use Smalot\PdfParser\Parser as PdfParser;
+use Vblite\Convert\Supporto\SpezzaPdf;
 
 /**
  * Estrae le righe di una stampa Octorate.
@@ -20,6 +21,12 @@ final class Parser
 {
     /** Passo verticale fra le righe logiche di un record. */
     private const PASSO_RIGA = 10.2;
+
+    /**
+     * Oltre questa dimensione un PDF che non si sa spezzare non si apre intero.
+     * La stampa di 201 pagine pesa 446 KB e ne occupa una decina in memoria.
+     */
+    private const MAX_BYTE_INTERO = 700 * 1024;
 
     private ?\Closure $progresso = null;
 
@@ -41,50 +48,123 @@ final class Parser
      */
     public function estrai(string $percorsoPdf): array
     {
+        $this->tracciato = null;
+        $righe = [];
+        $esito = $this->scorri($percorsoPdf, 1, static function (array $riga) use (&$righe): void {
+            $righe[] = $riga;
+        });
+
+        return ['righe' => $righe, 'pagine' => $esito['pagine'], 'intestazione' => $esito['intestazione']];
+    }
+
+    /**
+     * Legge un PDF e passa le righe una alla volta, invece di accumularle.
+     *
+     * Il PDF può essere intero oppure un pezzo che comincia dalla pagina
+     * $primaPagina dell'originale: le righe portano il numero di pagina vero.
+     * Una riga estratta pesa circa 3 KB, e una stampa di 1.849 pagine ne ha
+     * undicimila: tenerle tutte in memoria per raggrupparle dopo non si può.
+     *
+     * @param callable(array<string,string>):void $perRiga
+     * @return array{pagine:int,intestazione:array<string,mixed>}
+     */
+    public function scorri(string $percorsoPdf, int $primaPagina, callable $perRiga): array
+    {
         $documento = (new PdfParser())->parseFile($percorsoPdf);
         $pagine    = $documento->getPages();
         $totale    = count($pagine);
 
-        $righe        = [];
         $intestazione = ['struttura' => '', 'dal' => null, 'al' => null];
 
         foreach ($pagine as $indice => $pagina) {
             $chunk = $this->chunkOrdinati($pagina->getDataTm());
             self::liberaPagina($pagina);
 
-            if ($indice === 0) {
-                $testo = implode(' ', array_column($chunk, 't'));
-                $this->tracciato = Tracciato::riconosci($testo);
+            // Nei pezzi dopo il primo la stampa è già nota (usa()); nel primo
+            // si riconosce dalla prima pagina.
+            if ($this->tracciato === null) {
+                $this->tracciato = Tracciato::riconosci(implode(' ', array_column($chunk, 't')));
                 if ($this->tracciato === null) {
                     throw new \RuntimeException('Non riconosco questa stampa: accetto ' . Tracciato::nomi() . '.');
                 }
+            }
+            if ($indice === 0) {
                 $intestazione = $this->leggiTestata($chunk) + ['stampa' => $this->tracciato->nome];
             }
 
             $colonne = $this->bandeColonne($chunk);
-            if ($colonne === null) {
-                continue; // pagina senza tabella: si scarta insieme alla testata
+            if ($colonne !== null) {
+                foreach ($this->righePagina($chunk, $colonne, $primaPagina + $indice) as $riga) {
+                    $perRiga($riga);
+                }
             }
-
-            foreach ($this->righePagina($chunk, $colonne, $indice + 1) as $riga) {
-                $righe[] = $riga;
-            }
+            // una pagina senza tabella si scarta insieme alla testata
 
             if ($this->progresso !== null) {
                 ($this->progresso)($indice + 1, $totale);
             }
         }
 
-        return ['righe' => $righe, 'pagine' => $totale, 'intestazione' => $intestazione];
+        return ['pagine' => $totale, 'intestazione' => $intestazione];
+    }
+
+    /** Per i pezzi dopo il primo: la stampa è stata riconosciuta all'inizio. */
+    public function usa(Tracciato $tracciato): void
+    {
+        $this->tracciato = $tracciato;
+    }
+
+    public function tracciato(): ?Tracciato
+    {
+        return $this->tracciato;
     }
 
     /**
-     * Verifica che il PDF sia davvero una «Stampa clienti presenti» di Octorate.
-     * Guarda solo la prima pagina: costa poco e blocca subito i file sbagliati.
+     * Verifica che il PDF sia una delle stampe Octorate che sappiamo leggere.
+     *
+     * Guarda solo la prima pagina, e per guardarla non apre il documento
+     * intero: la libreria che legge i PDF li carica tutti, e su una stampa di
+     * 1.849 pagine costava 54 MB solo aprirlo — il processo veniva ucciso qui,
+     * al caricamento, prima ancora di poter dire che il file era troppo grande.
      *
      * @return array{ok:bool,motivo:?string,pagine:int,intestazione:array}
      */
     public function riconosci(string $percorsoPdf): array
+    {
+        $this->tracciato = null;
+        $spezzabile = SpezzaPdf::apri($percorsoPdf);
+
+        if ($spezzabile === null) {
+            // Un PDF che non sappiamo spezzare si può solo aprire intero: va
+            // bene finché è piccolo, e oltre si dice invece di morire.
+            if ((int) @filesize($percorsoPdf) > self::MAX_BYTE_INTERO) {
+                return [
+                    'ok' => false,
+                    'motivo' => 'Questo PDF è grande e ha una struttura che non so leggere a pezzi '
+                        . '(xref compressa o cifratura): intero non sta nella memoria del server. '
+                        . 'Esporta la stampa da Octorate per un periodo più corto.',
+                    'pagine' => 0,
+                    'intestazione' => [],
+                ];
+            }
+
+            return $this->riconosciPrimaPagina($percorsoPdf, null);
+        }
+
+        $pagine = $spezzabile->pagine();
+        $prima  = (string) tempnam(sys_get_temp_dir(), 'octo');
+        try {
+            $spezzabile->estrai(1, 1, $prima);
+            $spezzabile->chiudi();
+
+            return $this->riconosciPrimaPagina($prima, $pagine);
+        } finally {
+            @unlink($prima);
+        }
+    }
+
+    /** @return array{ok:bool,motivo:?string,pagine:int,intestazione:array} */
+    private function riconosciPrimaPagina(string $percorsoPdf, ?int $pagineVere): array
     {
         try {
             $documento = (new PdfParser())->parseFile($percorsoPdf);
@@ -96,6 +176,7 @@ final class Parser
         if ($pagine === []) {
             return ['ok' => false, 'motivo' => 'PDF vuoto', 'pagine' => 0, 'intestazione' => []];
         }
+        $quante = $pagineVere ?? count($pagine);
 
         $chunk = $this->chunkOrdinati($pagine[0]->getDataTm());
         $testo = implode(' ', array_map(static fn(array $c): string => $c['t'], $chunk));
@@ -106,7 +187,7 @@ final class Parser
                 'ok' => false,
                 'motivo' => 'Non è una stampa Octorate di quelle che leggo: accetto ' . Tracciato::nomi()
                     . '. Se quella che hai è un\'altra stampa, dimmelo: il metodo è lo stesso.',
-                'pagine' => count($pagine),
+                'pagine' => $quante,
                 'intestazione' => [],
             ];
         }
@@ -115,7 +196,7 @@ final class Parser
                 'ok' => false,
                 'motivo' => 'È una «' . $this->tracciato->nome . '», ma non ne riconosco le colonne: '
                     . 'la testata è diversa da quella attesa.',
-                'pagine' => count($pagine),
+                'pagine' => $quante,
                 'intestazione' => [],
             ];
         }
@@ -123,7 +204,7 @@ final class Parser
         return [
             'ok' => true,
             'motivo' => null,
-            'pagine' => count($pagine),
+            'pagine' => $quante,
             'intestazione' => $this->leggiTestata($chunk) + ['stampa' => $this->tracciato->nome],
         ];
     }
@@ -392,7 +473,12 @@ final class Parser
             }
             if (str_contains($t, '@')) {
                 $email = $email === '' ? $t : $email . $t;
-            } elseif (preg_match('~^\+?[\d][\d\s./+-]{4,}$~u', $t)) {
+            } elseif (preg_match('~^\+?\d[\d\s./+-]*$~u', $t)) {
+                // Solo cifre e separatori: è telefono, qualunque sia la lunghezza.
+                // La stampa spezza la colonna e lascia spesso il prefisso da solo
+                // su una riga — «0341» — e con una lunghezza minima quel pezzo
+                // finiva attaccato al nome: «Chiara 0341». Nei nomi le cifre non
+                // ci sono, quindi non c'è niente da proteggere.
                 $telefono = $telefono === '' ? $t : $telefono . ' ' . $t;
             } elseif ($cognome === '' && $indice === 0) {
                 $cognome = $t;

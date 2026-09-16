@@ -2,8 +2,15 @@
 /**
  * 2g — Da rivedere. Le righe sono gia' nel file: qui si correggono i valori
  * incerti e il foglio si riscrive, stesso job, nuova versione.
+ * Le segnalazioni arrivano già a pagine dal database: una stampa lunga ne ha
+ * migliaia, e questa pagina ne mostra quaranta.
+ *
  * @var array<string,mixed> $job
- * @var list<array<string,mixed>> $anomalie
+ * @var list<array<string,mixed>> $visibili    la pagina di segnalazioni da correggere
+ * @var int $totale                            quante sono in tutto
+ * @var int $pagina
+ * @var int $perPagina
+ * @var array<string,int> $informative         quelle informative, contate per colonna
  * @var array<string,array{valore:?string,saltata:bool}> $decisioni
  */
 use Vblite\Convert\Auth;
@@ -12,18 +19,14 @@ use Vblite\Convert\Vista;
 $lessico  = Vista::lessico((string) $job['tipologia']);
 $manifest = \Vblite\Convert\Conversioni\Registro::trova((string) $job['tipologia'])?->manifest() ?? [];
 
-$daCorreggere = array_values(array_filter($anomalie, static fn(array $a): bool => $a['gravita'] === 'correggi'));
-$informative  = array_values(array_filter($anomalie, static fn(array $a): bool => $a['gravita'] === 'informativa'));
-$pagina  = max(1, (int) ($_GET['pag'] ?? 1));
-$perPagina = 40;
-$totalePagine = max(1, (int) ceil(count($daCorreggere) / $perPagina));
-$visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
+$totalePagine     = max(1, (int) ceil($totale / $perPagina));
+$quanteInformative = array_sum($informative);
 ?>
 <div class="body" style="padding-top:var(--space-6)">
   <div class="tra">
     <div>
       <p class="kick" style="margin:0 0 8px;color:var(--color-accent-2-700)">
-        <?= Vista::numero(count($daCorreggere)) ?> <?= Vista::e($lessico['unita_plurale']) ?> su <?= Vista::numero($job['righe_scritte']) ?>
+        <?= Vista::numero($totale) ?> <?= Vista::e($lessico['unita_plurale']) ?> su <?= Vista::numero($job['righe_scritte']) ?>
       </p>
       <h2 class="h2"><?= Vista::e($manifest['titolo_rivedere'] ?? 'Da rivedere') ?></h2>
       <p class="lede" style="font-size:16px">
@@ -103,18 +106,14 @@ $visibili = array_slice($daCorreggere, ($pagina - 1) * $perPagina, $perPagina);
         </div>
         <div>
           <p class="kick" style="margin:0 0 8px">
-            Fatto senza chiedere · <?= Vista::numero(count($informative)) ?>
-            <?= count($informative) === 1 ? 'caso' : 'casi' ?>
+            Fatto senza chiedere · <?= Vista::numero($quanteInformative) ?>
+            <?= $quanteInformative === 1 ? 'caso' : 'casi' ?>
           </p>
           <p style="font-size:15px;line-height:1.6;color:rgba(32,30,29,.7);margin:0;max-width:60ch">
             <?= Vista::e($manifest['nota_informative'] ?? 'Deciso dalle regole della conversione e riportato qui solo per trasparenza:') ?>
             <?php
-            $perColonna = [];
-            foreach ($informative as $i) {
-                $perColonna[$i['colonna']] = ($perColonna[$i['colonna']] ?? 0) + 1;
-            }
             $pezzi = [];
-            foreach ($perColonna as $colonna => $n) {
+            foreach ($informative as $colonna => $n) {
                 $pezzi[] = Vista::numero($n) . ' su ' . Vista::e((string) $colonna);
             }
             echo implode(' · ', $pezzi);

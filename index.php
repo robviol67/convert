@@ -290,12 +290,24 @@ switch ($pagina) {
             header('Location: ?p=pronto&job=' . $job['riferimento']);
             exit;
         }
-        Vista::rendi('avanzamento', ['job' => $job, 'manifest' => Registro::trova($job['tipologia'])?->manifest()]);
+        Vista::rendi('avanzamento', [
+            'job'         => $job,
+            'manifest'    => Registro::trova($job['tipologia'])?->manifest(),
+            'conLaPagina' => Job::avanzaConLaPagina((int) $job['id']),
+        ]);
         break;
 
     case 'stato':
         Auth::richiedi();
         $job = jobRichiesto();
+
+        // Sulle conversioni a tappe è questa richiesta a portare avanti il
+        // lavoro: un pezzo a ogni giro della pagina di avanzamento.
+        if ($job['esito'] === Job::IN_CORSO) {
+            Job::avanza((int) $job['id']);
+            $job = Job::trova((int) $job['id']) ?? $job;
+        }
+
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'esito'           => $job['esito'],
@@ -304,7 +316,7 @@ switch ($pagina) {
             'pagine'          => (int) ($job['pagine'] ?? 0),
             'righe_lette'     => (int) ($job['righe_lette'] ?? 0),
             'righe_scritte'   => (int) ($job['righe_scritte'] ?? 0),
-            'da_rivedere'     => count(Job::anomalie((int) $job['id'], 'correggi')),
+            'da_rivedere'     => Job::contaAnomalie((int) $job['id'], 'correggi'),
             'errore'          => $job['errore'],
         ], JSON_UNESCAPED_UNICODE);
         break;
@@ -313,7 +325,7 @@ switch ($pagina) {
         Auth::richiedi();
         $verificaCsrf();
         $job = jobRichiesto();
-        Database::pdo()->prepare("UPDATE jobs SET esito = 'errore', errore = 'Annullata dall''utente' WHERE id = ?")->execute([$job['id']]);
+        Job::annulla((int) $job['id']);
         header('Location: ?p=storico');
         break;
 
@@ -321,11 +333,15 @@ switch ($pagina) {
     case 'pronto':
         $utente = Auth::richiedi();
         $job    = jobRichiesto();
+        // Un job ancora a metà non ha niente da mostrare qui.
+        if ($job['esito'] === Job::IN_CORSO) {
+            header('Location: ?p=avanzamento&job=' . $job['riferimento']);
+            exit;
+        }
         Vista::rendi('pronto', [
-            'job'         => $job,
-            'anomalie'    => Job::anomalie((int) $job['id'], 'correggi'),
-            'informative' => Job::anomalie((int) $job['id'], 'informativa'),
-            'anteprima'   => anteprimaUscita($job),
+            'job'        => $job,
+            'daRivedere' => Job::contaAnomalie((int) $job['id'], 'correggi'),
+            'anteprima'  => anteprimaUscita($job),
         ]);
         break;
 
@@ -349,10 +365,19 @@ switch ($pagina) {
     case 'rivedere':
         $utente = Auth::richiedi();
         $job    = jobRichiesto();
+        // Si porta in memoria solo la pagina che si guarda: una stampa lunga
+        // ha migliaia di segnalazioni, e caricarle tutte uccideva la pagina.
+        $perPagina = 40;
+        $totale    = Job::contaAnomalie((int) $job['id'], 'correggi');
+        $pagina    = min(max(1, (int) ($_GET['pag'] ?? 1)), max(1, (int) ceil($totale / $perPagina)));
         Vista::rendi('rivedere', [
-            'job'       => $job,
-            'anomalie'  => Job::anomalie((int) $job['id']),
-            'decisioni' => Job::decisioni((int) $job['id']),
+            'job'          => $job,
+            'visibili'     => Job::anomalie((int) $job['id'], 'correggi', $perPagina, ($pagina - 1) * $perPagina),
+            'totale'       => $totale,
+            'pagina'       => $pagina,
+            'perPagina'    => $perPagina,
+            'informative'  => Job::anomaliePerColonna((int) $job['id'], 'informativa'),
+            'decisioni'    => Job::decisioni((int) $job['id']),
         ]);
         break;
 
@@ -378,8 +403,8 @@ switch ($pagina) {
                 isset($saltate[$riferimento])
             );
         }
-        Job::applicaCorrezioni((int) $job['id']);
-        header('Location: ?p=pronto&job=' . $job['riferimento']);
+        $aTappe = Job::applicaCorrezioni((int) $job['id']);
+        header('Location: ?p=' . ($aTappe ? 'avanzamento' : 'pronto') . '&job=' . $job['riferimento']);
         break;
 
     // ─────────────────────────────────────────────── 2h · Storico

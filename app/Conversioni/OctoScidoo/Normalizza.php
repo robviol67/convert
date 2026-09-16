@@ -70,30 +70,68 @@ final class Normalizza
     }
 
     /**
-     * Distingue fisso e mobile. In Italia i mobili iniziano per 3; i prefissi
-     * internazionali si tengono come sono e finiscono su Telefono salvo il +39 3…
+     * Distingue fisso e mobile, anche quando la stampa ne incolla due.
      *
-     * @return array{fisso:?string,mobile:?string,troncato:bool}
+     * In Italia i mobili iniziano per 3; i prefissi internazionali si tengono
+     * come sono e finiscono su Telefono salvo il +39 3…
+     *
+     * La colonna Telefono della stampa è stretta, e taglia. Ne escono tre casi:
+     *
+     * - un numero intero, o due incollati — «0341 +39 329 592 5969». Un «+»
+     *   dopo l'inizio apre sempre un numero nuovo, e lì si separano;
+     * - un numero tagliato ma riconoscibile — «349 674»: si importa com'è e si
+     *   segnala, perché chi ha Octorate sotto mano può completarlo;
+     * - un moncone — «0341», «06», «339»: sotto le cinque cifre non è un numero,
+     *   è il prefisso rimasto dopo il taglio. Non si importa: scrivere «06» nel
+     *   telefono di un cliente è peggio che lasciarlo vuoto. Resta in 'scartato'.
+     *
+     * @return array{fisso:?string,mobile:?string,troncato:bool,scartato:?string}
      */
     public static function telefono(string $testo): array
     {
         $testo = trim(preg_replace('~\s+~u', ' ', $testo) ?? '');
         if ($testo === '') {
-            return ['fisso' => null, 'mobile' => null, 'troncato' => false];
+            return ['fisso' => null, 'mobile' => null, 'troncato' => false, 'scartato' => null];
         }
 
-        $cifre    = preg_replace('~\D~', '', $testo) ?? '';
-        $nazionale = preg_replace('~^(?:\+|00)39~', '', str_replace(' ', '', $testo)) ?? '';
-        $soloCifre = preg_replace('~\D~', '', $nazionale) ?? '';
-        $mobile    = str_starts_with($soloCifre, '3') && !str_starts_with($cifre, '00') || preg_match('~^(?:\+|00)39\s?3~', $testo) === 1;
+        $fisso    = null;
+        $mobile   = null;
+        $troncato = false;
+        $scartati = [];
 
-        // Un numero italiano completo ha almeno 9 cifre (fissi corti compresi).
-        $troncato = strlen($cifre) < 9;
+        foreach (preg_split('~\s+(?=\+)|\s*/\s*~u', $testo) ?: [] as $pezzo) {
+            $pezzo = trim($pezzo);
+            $cifre = preg_replace('~\D~', '', $pezzo) ?? '';
+            if ($cifre === '') {
+                continue;
+            }
+            if (strlen($cifre) < 5) {
+                $scartati[] = $pezzo;
+                continue;
+            }
+
+            $nazionale = preg_replace('~^(?:\+|00)39~', '', str_replace(' ', '', $pezzo)) ?? '';
+            $soloCifre = preg_replace('~\D~', '', $nazionale) ?? '';
+            $eMobile   = str_starts_with($soloCifre, '3') && !str_starts_with($cifre, '00')
+                || preg_match('~^(?:\+|00)39\s?3~', $pezzo) === 1;
+
+            if ($eMobile) {
+                $mobile ??= $pezzo;
+            } else {
+                $fisso ??= $pezzo;
+            }
+
+            // Un numero italiano completo ha almeno 9 cifre (fissi corti compresi).
+            if (strlen($cifre) < 9) {
+                $troncato = true;
+            }
+        }
 
         return [
-            'fisso'    => $mobile ? null : $testo,
-            'mobile'   => $mobile ? $testo : null,
+            'fisso'    => $fisso,
+            'mobile'   => $mobile,
             'troncato' => $troncato,
+            'scartato' => $scartati === [] ? null : implode(' ', $scartati),
         ];
     }
 

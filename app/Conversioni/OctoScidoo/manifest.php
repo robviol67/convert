@@ -18,7 +18,7 @@ return [
     'si_puo' => [
         '<em>Stampa clienti presenti</em>, in PDF, con la testata e le 23 colonne originali',
         '<em>Stampa prenotazioni</em>, in PDF: la riconosce da sé, non devi dire quale sia',
-        'Qualunque periodo, anche pluriennale',
+        'Qualunque periodo, anche pluriennale: le stampe lunghe si leggono a tappe',
         'Prenotazioni dirette e da OTA: Booking.com, Quick Booking, Expedia',
         'Gruppi con più ospiti sullo stesso N°pren.',
         'Dalla <em>Stampa prenotazioni</em> arrivano anche telefono, e-mail, data d\'inserimento e scadenza dell\'opzione',
@@ -31,7 +31,7 @@ return [
     ],
 
     'specifiche' => [
-        'Ingresso'      => 'PDF · max 50 MB · 500 pagine',
+        'Ingresso'      => 'PDF · max 50 MB · 10.000 pagine',
         'Colonne lette' => '23 · 25',
         'Uscita'        => 'XLSX · 32 colonne · o CSV',
         'Granularità'   => '1 riga = 1 prenotazione',
@@ -75,7 +75,9 @@ return [
     'formati_uscita'      => ['xlsx' => 'XLSX', 'csv' => 'CSV'],
     'estensioni_ingresso' => ['pdf'],
     'nome_uscita'         => 'File Import Prenotazioni',
-    'max_pagine'          => 500,
+    // Le stampe si leggono a tappe e il tetto della memoria non dipende più
+    // dalle pagine: il limite resta solo come freno a un file sbagliato.
+    'max_pagine'          => 10000,
     'ha_periodo'          => true,
 
     // Come si chiamano le cose, in questa tipologia. Le schermate sono uniche:

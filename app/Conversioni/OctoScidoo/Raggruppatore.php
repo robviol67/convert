@@ -41,6 +41,11 @@ final class Raggruppatore
         'Pernott. Prima Colazione'  => ['retta' => 'Bed & Breakfast',    'servizio' => 'Pernotto'],
         'Mezza Pensione'            => ['retta' => 'Mezza Pensione',     'servizio' => 'Cena'],
         'Pensione Completa'         => ['retta' => 'Pensione Completa',  'servizio' => 'Cena'],
+        // Gli stessi trattamenti, con i nomi che usa un'altra struttura.
+        'Only Room'                     => ['retta' => 'Room Only',       'servizio' => 'Pernotto'],
+        'Camera con Colazione'          => ['retta' => 'Bed & Breakfast', 'servizio' => 'Pernotto'],
+        // La colazione offerta resta una colazione: per Scidoo è un B&B.
+        'Camera con Colazione Omaggio'  => ['retta' => 'Bed & Breakfast', 'servizio' => 'Pernotto'],
     ];
 
     /** @var list<array<string,mixed>> */
@@ -79,6 +84,34 @@ final class Raggruppatore
             'anomalie'     => $this->anomalie,
             'righe_lette'  => count($righe),
         ];
+    }
+
+    /**
+     * Come raggruppa(), ma una prenotazione alla volta, dalle righe su disco.
+     *
+     * Il risultato è lo stesso — stesso ordine, stesse anomalie nello stesso
+     * ordine — ma in memoria c'è sempre una prenotazione sola: è quello che
+     * permette di convertire una stampa di duemila pagine su un hosting che ne
+     * regge duecento.
+     *
+     * @param callable(array<string,mixed>):void $perPrenotazione
+     * @param callable(array<string,mixed>):void $perAnomalia
+     * @return int righe lette
+     */
+    public function raggruppaArchivio(ArchivioRighe $archivio, callable $perPrenotazione, callable $perAnomalia): int
+    {
+        $this->anomalie = [];
+
+        return $archivio->perPrenotazione(function (string $npren, array $ospiti) use ($perPrenotazione, $perAnomalia): void {
+            $prenotazione = $this->prenotazione($npren, $ospiti);
+            foreach ($this->anomalie as $anomalia) {
+                $perAnomalia($anomalia);
+            }
+            $this->anomalie = [];
+            if ($prenotazione !== null) {
+                $perPrenotazione($prenotazione);
+            }
+        });
     }
 
     /**
@@ -161,7 +194,18 @@ final class Raggruppatore
 
         // --- Contatti dell'intestatario ---
         $telefono = Normalizza::telefono($capofila['telefono']);
-        if ($telefono['troncato']) {
+        if ($telefono['fisso'] === null && $telefono['mobile'] === null && $telefono['scartato'] !== null) {
+            // Non c'è niente da correggere a mano: nella stampa il numero non
+            // c'è. Si dice, e il campo resta vuoto.
+            $this->segnala(
+                $npren,
+                $cliente,
+                'Nella stampa del telefono resta solo «' . $telefono['scartato'] . '»: non è un numero, non è stato importato',
+                'Telefono Cliente',
+                '',
+                'informativa'
+            );
+        } elseif ($telefono['troncato']) {
             $this->segnala(
                 $npren,
                 $cliente,
