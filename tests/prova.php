@@ -214,7 +214,9 @@ if (!is_file($pdf)) {
     }
     $out = $conversione->converti($pdf, $uscita, Raggruppatore::REGOLE_DEFAULT);
     $piccoConversione = memory_get_peak_usage(true) / 1048576;
-    verifica('584 righe scritte', 584, $out['righe_scritte']);
+    // 584 prenotazioni, 593 righe: sei stanno su più camere, e in Scidoo una
+    // riga è un soggiorno in una camera.
+    verifica('593 righe scritte da 584 prenotazioni', 593, $out['righe_scritte']);
     vero('il file esiste ed e\' non vuoto', is_file($uscita) && filesize($uscita) > 10000);
 
     $foglio = new \Vblite\Convert\Test\LettoreXlsx($uscita);
@@ -229,7 +231,7 @@ if (!is_file($pdf)) {
     verifica('prezzo formattato come valuta', '#,##0.00\\ "€"', $foglio->formato('T2'));
     verifica('prima riga: retta', 'Room Only', $foglio->valore('S2'));
     verifica('prima riga: servizio iniziale', 'Pernotto', $foglio->valore('AD2'));
-    verifica('ultima riga scritta', 585, $foglio->ultimaRiga());
+    verifica('ultima riga scritta', 594, $foglio->ultimaRiga());
 
     // Excel applica alla lettera la sequenza dichiarata dallo schema OOXML.
     // Un ordine sbagliato passa inosservato alle librerie tolleranti e fa
@@ -332,11 +334,56 @@ if (!is_file($pdf)) {
     verifica('le righe non corrette restano tali', 'LAUDATI', $conCorrezioni->valore('D2'));
     @unlink($corretto);
 
+    // ── Una prenotazione su più camere fa più righe ──────────────────────
+    // In Scidoo una riga è un soggiorno in una camera. La stampa scrive gli
+    // importi camera per camera, e ogni riga si porta i suoi: ripeterli
+    // moltiplicherebbe il valore della prenotazione.
+    $tutte = (new Raggruppatore(Raggruppatore::REGOLE_DEFAULT))->raggruppa($estratto['righe'])['prenotazioni'];
+    $perNumero = [];
+    foreach ($tutte as $p) {
+        $perNumero[$p['npren']][] = $p;
+    }
+    verifica('584 prenotazioni distinte', 584, count($perNumero));
+    verifica('ma 593 righe', 593, count($tutte));
+
+    $suPiuCamere = array_values(array_filter($perNumero, static fn(array $r): bool => count($r) > 1));
+    verifica('sei prenotazioni su più camere', 6, count($suPiuCamere));
+
+    $adorni = $perNumero['4.871'];
+    verifica('4.871 esce in quattro righe', 4, count($adorni));
+    verifica('una per camera, in ordine', ['1', '2', '7', '8'], array_column($adorni, 'camera'));
+    verifica('con lo stesso id su tutte', [4871, 4871, 4871, 4871], array_column($adorni, 'id'));
+    verifica('stesso cliente', ['ADORNI', 'ADORNI', 'ADORNI', 'ADORNI'], array_column($adorni, 'cognome'));
+    verifica('stesse date di arrivo', 1, count(array_unique(array_column($adorni, 'arrivo'))));
+    verifica('ogni camera col suo importo', [680.0, null, 1490.2, 820.0], array_column($adorni, 'prezzo_retta'));
+    verifica('e l\'acconto sulla camera che ce l\'ha', [null, null, 1064.0, null], array_column($adorni, 'acconto'));
+
+    // La somma delle righe è quella della stampa: 680 + 1.490,20 + 820.
+    verifica('gli importi non si ripetono', 2990.2, round(array_sum(array_map(
+        static fn(array $p): float => (float) ($p['prezzo_retta'] ?? 0),
+        $adorni
+    )), 2));
+
+    // Non è più una decisione da prendere: è una cosa fatta, e si dice.
+    $suCamere = array_values(array_filter(
+        $out['anomalie'],
+        static fn(array $a): bool => $a['chiave'] === '4.871' && str_contains($a['motivo'], 'camere')
+    ));
+    verifica('lo sdoppiamento è dichiarato', 1, count($suCamere));
+    verifica('e non chiede di correggere niente', 'informativa', $suCamere[0]['gravita'] ?? '');
+
+    // Con la regola spenta si torna a una riga sola, com'era prima.
+    $unite = (new Raggruppatore(['camere_su_righe_separate' => false] + Raggruppatore::REGOLE_DEFAULT))
+        ->raggruppa($estratto['righe'])['prenotazioni'];
+    verifica('spenta la regola, una riga per prenotazione', 584, count($unite));
+    $unita = array_values(array_filter($unite, static fn(array $p): bool => $p['npren'] === '4.871'))[0];
+    verifica('e le camere tornano tutte in una cella', '1, 2, 7, 8', $unita['camera']);
+
     // ── CSV ──────────────────────────────────────────────────────────────
     $csv = sys_get_temp_dir() . '/prova-' . getmypid() . '.csv';
     (new ConversioneOctoScidoo())->converti($pdf, $csv, ['formato' => 'csv'] + Raggruppatore::REGOLE_DEFAULT);
     $righeCsv = file($csv, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-    verifica('CSV: 1 intestazione + 584 righe', 585, count($righeCsv));
+    verifica('CSV: 1 intestazione + 593 righe', 594, count($righeCsv));
     vero('CSV: le date sono leggibili, non seriali', str_contains($righeCsv[1], '16/01/2024'));
     @unlink($csv);
 

@@ -18,6 +18,10 @@ final class Raggruppatore
         'deduci_categoria_camera'   => false,
         'salta_annullate'           => true,
         'sorgente_camera'           => 'cam',   // cam | gruppo | vuoto
+        // Una prenotazione su più camere esce in una riga per camera: in
+        // Scidoo una riga è un soggiorno in una camera, e la stampa dà gli
+        // importi camera per camera.
+        'camere_su_righe_separate'  => true,
         // Spenta di default: nel file di esempio «Letto agg. Bambino» compare in
         // 522 prenotazioni su 584, comprese 223 con un solo ospite e diverse
         // prenotazioni aziendali da una persona. Sembra una voce tariffaria, non
@@ -72,11 +76,9 @@ final class Raggruppatore
 
         $prenotazioni = [];
         foreach ($gruppi as $npren => $ospiti) {
-            $prenotazione = $this->prenotazione((string) $npren, $ospiti);
-            if ($prenotazione === null) {
-                continue; // fuori periodo o annullata
+            foreach ($this->righeDi((string) $npren, $ospiti) as $riga) {
+                $prenotazioni[] = $riga;
             }
-            $prenotazioni[] = $prenotazione;
         }
 
         return [
@@ -103,15 +105,118 @@ final class Raggruppatore
         $this->anomalie = [];
 
         return $archivio->perPrenotazione(function (string $npren, array $ospiti) use ($perPrenotazione, $perAnomalia): void {
-            $prenotazione = $this->prenotazione($npren, $ospiti);
+            $righe = $this->righeDi($npren, $ospiti);
             foreach ($this->anomalie as $anomalia) {
                 $perAnomalia($anomalia);
             }
             $this->anomalie = [];
-            if ($prenotazione !== null) {
-                $perPrenotazione($prenotazione);
+            foreach ($righe as $riga) {
+                $perPrenotazione($riga);
             }
         });
+    }
+
+    /**
+     * Le righe in uscita di una prenotazione: una sola, o una per camera.
+     *
+     * Le correzioni fatte a mano si applicano alla fine, riga per riga: una
+     * decisione presa su una prenotazione vale per tutte le sue camere.
+     *
+     * @param list<array<string,string>> $ospiti
+     * @return list<array<string,mixed>>
+     */
+    private function righeDi(string $npren, array $ospiti): array
+    {
+        $prenotazione = $this->prenotazione($npren, $ospiti);
+        if ($prenotazione === null) {
+            return [];   // fuori periodo o annullata
+        }
+
+        $righe = [];
+        foreach ($this->perCamera($npren, $ospiti, $prenotazione) as $riga) {
+            $righe[] = $this->applicaCorrezioni($npren, $riga);
+        }
+
+        return $righe;
+    }
+
+    /**
+     * Una riga per camera.
+     *
+     * In Scidoo una riga è un soggiorno in una camera, e una prenotazione che
+     * ne tiene tre è tre righe: stesso numero di prenotazione, stesso cliente,
+     * stesse date, camera diversa. Lo dice anche la stampa, che gli importi li
+     * scrive camera per camera — nella 4.871 del file di esempio sono 680,00
+     * sulla 1, niente sulla 2, 1.490,20 sulla 7 e 820,00 sulla 8.
+     *
+     * Gli importi seguono la loro camera e non si ripetono: ripeterli
+     * moltiplicherebbe il valore della prenotazione. Una camera che non ne
+     * dichiara resta senza.
+     *
+     * @param list<array<string,string>> $ospiti
+     * @param array<string,mixed>        $prenotazione
+     * @return list<array<string,mixed>>
+     */
+    private function perCamera(string $npren, array $ospiti, array $prenotazione): array
+    {
+        if (!$this->regole['camere_su_righe_separate']) {
+            return [$prenotazione];
+        }
+
+        $perCamera = [];
+        foreach ($ospiti as $ospite) {
+            $camera = trim($ospite['camera']);
+            if ($camera !== '') {
+                $perCamera[$camera][] = $ospite;
+            }
+        }
+        if (count($perCamera) < 2) {
+            return [$prenotazione];
+        }
+
+        $cliente = trim($ospiti[0]['cognome'] . ' ' . $ospiti[0]['nome']);
+        $righe   = [];
+        foreach ($perCamera as $camera => $suoi) {
+            $riga = $prenotazione;
+            $riga['camera'] = (string) $camera;
+
+            $riga['prezzo_retta'] = $this->primoImporto($suoi, 'importo');
+            $riga['caparra']      = $this->primoImporto($suoi, 'caparre');
+            $riga['acconto']      = $this->primoImporto($suoi, 'acconti');
+
+            // Gli ospiti sono quelli di questa camera. Le segnalazioni le ha
+            // già fatte il conto sull'intera prenotazione: qui si tace.
+            [$riga['adulti'], $riga['bambini'], $riga['neonati']] = $this->fasceEta($npren, $cliente, $suoi, false);
+
+            foreach ($suoi as $ospite) {
+                if (trim((string) ($ospite['tipo_camera'] ?? '')) !== '') {
+                    $riga['categoria_camera'] = trim((string) $ospite['tipo_camera']);
+                    break;
+                }
+            }
+
+            $riga['_ospiti'] = count($suoi);
+            $righe[] = $riga;
+        }
+
+        return $righe;
+    }
+
+    /**
+     * Il primo importo dichiarato fra queste righe, se c'è.
+     *
+     * @param list<array<string,string>> $righe
+     */
+    private function primoImporto(array $righe, string $campo): ?float
+    {
+        foreach ($righe as $riga) {
+            $valore = Normalizza::importo((string) ($riga[$campo] ?? ''));
+            if ($valore !== null) {
+                return $valore;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -227,7 +332,21 @@ final class Raggruppatore
         ))));
         if (count($camere) > 1) {
             $camera = implode(', ', $camere);
-            $this->segnala($npren, $cliente, 'Prenotazione su più camere: ' . $camera, 'Camera', $camera);
+            // Se le camere vanno su righe separate non c'è niente da decidere:
+            // si dice cosa è stato fatto e si tira dritto.
+            if ($this->regole['camere_su_righe_separate']) {
+                $this->segnala(
+                    $npren,
+                    $cliente,
+                    'Prenotazione su ' . count($camere) . ' camere (' . $camera . '): una riga per camera, '
+                        . 'con gli importi di ciascuna',
+                    'Camera',
+                    '',
+                    'informativa'
+                );
+            } else {
+                $this->segnala($npren, $cliente, 'Prenotazione su più camere: ' . $camera, 'Camera', $camera);
+            }
         }
 
         // --- Voci senza colonna nel tracciato ---
@@ -290,7 +409,7 @@ final class Raggruppatore
             '_pagina'           => (int) $capofila['pagina'],
         ];
 
-        return $this->applicaCorrezioni($npren, $prenotazione);
+        return $prenotazione;
     }
 
     /**
@@ -354,7 +473,7 @@ final class Raggruppatore
      * @param list<array<string,string>> $ospiti
      * @return array{0:int,1:int,2:int}
      */
-    private function fasceEta(string $npren, string $cliente, array $ospiti): array
+    private function fasceEta(string $npren, string $cliente, array $ospiti, bool $segnala = true): array
     {
         // Sulla «Stampa prenotazioni» le tre fasce stanno in tre colonne loro —
         // A, B, I — e allora non c'e' niente da dedurre: si leggono. È il
@@ -379,7 +498,7 @@ final class Raggruppatore
         foreach ($ospiti as $ospite) {
             $paxDichiarati += (int) $ospite['pax'];
         }
-        if ($paxDichiarati > 0 && $paxDichiarati !== $totale) {
+        if ($segnala && $paxDichiarati > 0 && $paxDichiarati !== $totale) {
             $this->segnala($npren, $cliente, "Pax dichiarati ({$paxDichiarati}) diversi dalle righe ospite ({$totale})", 'Adulti · Bambini', (string) $totale);
         }
 
@@ -397,36 +516,40 @@ final class Raggruppatore
 
         if ($lettiBambino >= $totale) {
             // Il supplemento non puo' descrivere tutti gli ospiti elencati.
-            $this->segnala(
-                $npren,
-                $cliente,
-                sprintf(
-                    '%s con %d «Letto agg. Bambino»: il conteggio non torna',
-                    self::plurale($totale, 'ospite', 'ospiti'),
-                    $lettiBambino
-                ),
-                'Adulti · Bambini',
-                "{$totale}·0"
-            );
+            if ($segnala) {
+                $this->segnala(
+                    $npren,
+                    $cliente,
+                    sprintf(
+                        '%s con %d «Letto agg. Bambino»: il conteggio non torna',
+                        self::plurale($totale, 'ospite', 'ospiti'),
+                        $lettiBambino
+                    ),
+                    'Adulti · Bambini',
+                    "{$totale}·0"
+                );
+            }
 
             return [$totale, 0, 0];
         }
 
         $bambini = $lettiBambino;
         $adulti  = $totale - $bambini;
-        $this->segnala(
-            $npren,
-            $cliente,
-            sprintf(
-                '%d ospiti + «Letto agg. Bambino»: %s e %s, oppure %d adulti?',
-                $totale,
-                self::plurale($adulti, 'adulto', 'adulti'),
-                self::plurale($bambini, 'bambino', 'bambini'),
-                $totale
-            ),
-            'Adulti · Bambini',
-            "{$adulti}·{$bambini}"
-        );
+        if ($segnala) {
+            $this->segnala(
+                $npren,
+                $cliente,
+                sprintf(
+                    '%d ospiti + «Letto agg. Bambino»: %s e %s, oppure %d adulti?',
+                    $totale,
+                    self::plurale($adulti, 'adulto', 'adulti'),
+                    self::plurale($bambini, 'bambino', 'bambini'),
+                    $totale
+                ),
+                'Adulti · Bambini',
+                "{$adulti}·{$bambini}"
+            );
+        }
 
         return [$adulti, $bambini, 0];
     }
