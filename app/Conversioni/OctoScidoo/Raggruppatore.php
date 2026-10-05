@@ -16,6 +16,10 @@ final class Raggruppatore
         'una_riga_per_prenotazione' => true,
         'ripulisci_commenti'        => true,
         'deduci_categoria_camera'   => false,
+        // Il «Tipo camera» della Stampa prenotazioni è testo libero — «tripla
+        // XXX», «matrimoniale Superior» — e non sono le categorie di Scidoo:
+        // il committente ha chiesto di non portarlo dentro.
+        'categoria_da_tipo_camera'  => false,
         'salta_annullate'           => true,
         'sorgente_camera'           => 'cam',   // cam | gruppo | vuoto
         // Una prenotazione su più camere esce in una riga per camera: in
@@ -45,8 +49,9 @@ final class Raggruppatore
         'Pernott. Prima Colazione'  => ['retta' => 'Bed & Breakfast',    'servizio' => 'Pernotto'],
         'Mezza Pensione'            => ['retta' => 'Mezza Pensione',     'servizio' => 'Cena'],
         'Pensione Completa'         => ['retta' => 'Pensione Completa',  'servizio' => 'Cena'],
-        // Gli stessi trattamenti, con i nomi che usa un'altra struttura.
+        // Gli stessi trattamenti, coi nomi che usano le altre strutture.
         'Only Room'                     => ['retta' => 'Room Only',       'servizio' => 'Pernotto'],
+        'Bed & Breakfast'               => ['retta' => 'Bed & Breakfast', 'servizio' => 'Pernotto'],
         'Camera con Colazione'          => ['retta' => 'Bed & Breakfast', 'servizio' => 'Pernotto'],
         // La colazione offerta resta una colazione: per Scidoo è un B&B.
         'Camera con Colazione Omaggio'  => ['retta' => 'Bed & Breakfast', 'servizio' => 'Pernotto'],
@@ -188,10 +193,12 @@ final class Raggruppatore
             // già fatte il conto sull'intera prenotazione: qui si tace.
             [$riga['adulti'], $riga['bambini'], $riga['neonati']] = $this->fasceEta($npren, $cliente, $suoi, false);
 
-            foreach ($suoi as $ospite) {
-                if (trim((string) ($ospite['tipo_camera'] ?? '')) !== '') {
-                    $riga['categoria_camera'] = trim((string) $ospite['tipo_camera']);
-                    break;
+            if ($this->regole['categoria_da_tipo_camera']) {
+                foreach ($suoi as $ospite) {
+                    if (trim((string) ($ospite['tipo_camera'] ?? '')) !== '') {
+                        $riga['categoria_camera'] = trim((string) $ospite['tipo_camera']);
+                        break;
+                    }
                 }
             }
 
@@ -288,12 +295,14 @@ final class Raggruppatore
         // --- Commenti ---
         [$note, $noteOta, $categoria] = $this->note($npren, $cliente, $ospiti);
 
-        // La «Stampa prenotazioni» il tipo di camera lo dichiara. Dove c'è
-        // scritto, quello scritto vince su qualunque deduzione dai commenti.
-        foreach ($ospiti as $ospite) {
-            if (trim((string) ($ospite['tipo_camera'] ?? '')) !== '') {
-                $categoria = trim((string) $ospite['tipo_camera']);
-                break;
+        // La «Stampa prenotazioni» dichiara il tipo di camera, ma è testo
+        // libero e non una categoria di Scidoo: entra solo se lo si chiede.
+        if ($this->regole['categoria_da_tipo_camera']) {
+            foreach ($ospiti as $ospite) {
+                if (trim((string) ($ospite['tipo_camera'] ?? '')) !== '') {
+                    $categoria = trim((string) $ospite['tipo_camera']);
+                    break;
+                }
             }
         }
 
@@ -350,12 +359,21 @@ final class Raggruppatore
         }
 
         // --- Voci senza colonna nel tracciato ---
+        // Lo Sconto non c'è: il committente ha chiesto di lasciarlo fuori, e
+        // nelle stampe viste finora è sempre vuoto.
         $extra = [];
-        foreach (['tassa_sogg' => 'Tassa sogg', 'sconto' => 'Sconto', 'convenzione' => 'Convenzione'] as $campo => $etichetta) {
+        foreach (['tassa_sogg' => 'Tassa sogg', 'convenzione' => 'Convenzione'] as $campo => $etichetta) {
             $valore = trim((string) ($capofila[$campo] ?? ''));
-            if ($valore !== '') {
-                $extra[] = "{$etichetta}: {$valore}";
+            if ($valore === '') {
+                continue;
             }
+            // Spesso la Convenzione ripete il Trattamento — «Bed & Breakfast»
+            // in tutte e due le colonne — e trascriverla in Note non aggiunge
+            // niente. Quando dice un'altra cosa («Full-Credit») resta.
+            if ($campo === 'convenzione' && $valore === trim((string) $capofila['trattamento'])) {
+                continue;
+            }
+            $extra[] = "{$etichetta}: {$valore}";
         }
         if ($extra !== []) {
             $note = trim(implode(' · ', $extra) . ($note !== '' ? ' · ' . $note : ''));

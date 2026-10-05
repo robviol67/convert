@@ -298,7 +298,7 @@ final class Parser
         $x  = [];
         $y0 = null;
         foreach ($chunk as $c) {
-            if (trim($c['t']) === $ancore['npren']) {
+            if (in_array(trim($c['t']), (array) $ancore['npren'], true)) {
                 $x['npren'] = $c['x'];
                 $y0         = $c['y'];
                 break;
@@ -317,7 +317,7 @@ final class Parser
             }
             $t = trim($c['t']);
             foreach ($ancore as $chiave => $etichetta) {
-                if ($etichetta !== null && $t === $etichetta && !isset($x[$chiave])) {
+                if ($etichetta !== null && !isset($x[$chiave]) && in_array($t, (array) $etichetta, true)) {
                     $x[$chiave] = $c['x'];
                 }
             }

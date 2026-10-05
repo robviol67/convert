@@ -116,11 +116,21 @@ verifica('ID', '6101', $foglio->valore('B2'));
 verifica('Nome Cliente', 'mario', $foglio->valore('C2'));
 verifica('Cognome Cliente', 'ROSSI1', $foglio->valore('D2'));
 verifica('Camera', '11', $foglio->valore('G2'));
-verifica('Categoria Camera dalla colonna Tipo camera', 'Matrim - Doppia', $foglio->valore('H2'));
+// Il Tipo camera della stampa è testo libero, non una categoria di Scidoo:
+// entra solo se lo si chiede.
+verifica('Categoria Camera resta vuota', null, $foglio->valore('H2'));
 verifica('Adulti', '2', $foglio->valore('O2'));
 verifica('Bambini', '0', $foglio->valore('P2'));
 verifica('Retta dal trattamento', 'Mezza Pensione', $foglio->valore('S2'));
 verifica('Prezzo Retta con le migliaia', '1250.5', $foglio->valore('T2'));
+
+$conCategoria = $tmp . '/con-categoria.xlsx';
+$conversione->converti($pdf, $conCategoria, ['formato' => 'xlsx', 'categoria_da_tipo_camera' => true]);
+verifica(
+    'chiedendola, arriva dal Tipo camera',
+    'Matrim - Doppia',
+    (new LettoreXlsx($conCategoria))->valore('H2')
+);
 
 // Le fasce dichiarate si leggono, non si deducono: nessuna segnalazione.
 $daRivedere = array_filter($esito['anomalie'], static fn(array $a): bool => $a['gravita'] === 'correggi');
@@ -129,6 +139,21 @@ verifica('nessuna incertezza sulle fasce d\'età', [], array_values($suFasce));
 
 // La terza prenotazione ha un bambino dichiarato: dev'essere nel foglio.
 verifica('il bambino dichiarato arriva nel foglio', '1', $foglio->valore('P4'));
+
+// ── La stessa stampa, con l'intestazione scritta tutta intera ────────────────
+// Da una struttura all'altra Octorate scrive «N°pren.» in un pezzo solo invece
+// che in tre: è la stessa stampa e va letta uguale.
+$intero = $tmp . '/numero-intero.pdf';
+stampaPrenotazioni($intero, 2, 6, false, true);
+$vIntero = $conversione->verifica($intero);
+vero('anche con «N°pren.» intero la stampa è accettata', $vIntero['ok']);
+verifica('ed è sempre la stessa stampa', 'Stampa prenotazioni', $vIntero['intestazione']['stampa'] ?? '');
+$estrattoIntero = (new Parser())->estrai($intero);
+verifica('con le stesse righe', count($estratto['righe']), count($estrattoIntero['righe']));
+verifica('e gli stessi numeri di prenotazione',
+    array_column($estratto['righe'], 'npren'),
+    array_column($estrattoIntero['righe'], 'npren'));
+verifica('e lo stesso primo cliente', $primo['cognome'], $estrattoIntero['righe'][0]['cognome']);
 
 // ── La stampa storica continua a funzionare ──────────────────────────────────
 $vecchia = __DIR__ . '/../../handoff_octo_scidoo/esempi/prenotazioni 2024 2025.pdf';

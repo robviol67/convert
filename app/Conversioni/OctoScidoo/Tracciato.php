@@ -25,7 +25,9 @@ final class Tracciato
 {
     /**
      * @param string                $titolo   la stringa che identifica la stampa, a pagina 1
-     * @param array<string,?string> $ancore   colonna → etichetta di testata (null: interpolata)
+     * @param array<string,string|list<string>|null> $ancore colonna → etichetta di
+     *        testata, o le scritture possibili quando la stessa stampa le
+     *        cambia da una struttura all'altra (null: interpolata)
      * @param array<string,array{0:string,1:int|string,2?:string}> $campi
      *        campo → [colonna, sottoriga o 'tutte', 'num' per ricucire i numeri]
      * @param int  $righeTestata  quante righe impila la testata: sotto, cominciano i dati
@@ -162,9 +164,10 @@ final class Tracciato
     /**
      * La stampa delle prenotazioni: una riga per prenotazione.
      *
-     * L'intestazione del numero arriva spezzata in tre pezzi — «N», «°»,
-     * «pren.» — quindi l'ancora è l'ultimo, che è anche quello che dà la
-     * posizione giusta della colonna.
+     * L'intestazione del numero non è sempre scritta allo stesso modo: da una
+     * struttura arriva intera, «N°pren.», da un'altra spezzata in tre pezzi —
+     * «N», «°», «pren.» — e allora l'ancora è l'ultimo, che è anche quello che
+     * dà la posizione giusta della colonna. Si accettano tutte e due.
      */
     private static function prenotazioni(): self
     {
@@ -173,7 +176,7 @@ final class Tracciato
             'Stampa prenotazioni',
             'Stampa prenotazioni',
             [
-                'npren'       => 'pren.',
+                'npren'       => ['N°pren.', 'pren.'],
                 'cognome'     => 'Cognome',
                 'arrivo'      => 'Arrivo',
                 'camera'      => 'Cam.',

@@ -79,7 +79,7 @@ function t(float $x, float $y, string $testo, int $corpo = 7): string
  * Una pagina di «Stampa prenotazioni», con la geometria di quella vera:
  * testata su cinque righe fitte, record su cinque righe logiche a passo 10,2.
  */
-function paginaPrenotazioni(array $record, int $numero): string
+function paginaPrenotazioni(array $record, int $numero, bool $numeroIntero = false): string
 {
     // Le colonne, alle coordinate della stampa vera.
     $X = ['npren' => 37.0, 'cognome' => 68.3, 'arrivo' => 179.9, 'camera' => 225.4,
@@ -93,7 +93,13 @@ function paginaPrenotazioni(array $record, int $numero): string
 
     // Testata: la prima riga porta le ancore di colonna, sotto si impilano
     // le altre voci a passo piu' stretto, come nell'originale.
-    $c .= t(27.6, 488.1, 'N') . t(33.1, 488.1, "\u{00b0}") . t($X['npren'], 488.1, 'pren.');
+    // La stessa stampa scrive l'intestazione del numero in due modi, a seconda
+    // della struttura: tutta intera, o spezzata in tre pezzi.
+    // Il grado va scritto col byte della codifica del font (WinAnsi), non in
+    // UTF-8: due byte uscirebbero dal lettore come «NÂ°pren.».
+    $c .= $numeroIntero
+        ? t($X['npren'], 488.1, "N\xB0pren.")
+        : t(27.6, 488.1, 'N') . t(33.1, 488.1, "\u{00b0}") . t($X['npren'], 488.1, 'pren.');
     $c .= t(33.4, 480.2, 'Data') . t(35.3, 472.3, 'Ora');
     $c .= t($X['cognome'], 488.1, 'Cognome') . t($X['cognome'], 480.2, 'Nome')
         . t($X['cognome'], 472.3, 'Telefono') . t($X['cognome'], 464.4, 'eMail');
@@ -185,7 +191,7 @@ function record(int $n): array
  * Scrive una stampa di $pagine pagine con $perPagina prenotazioni ciascuna.
  * Le prenotazioni sono numerate di seguito da 1.
  */
-function stampaPrenotazioni(string $percorso, int $pagine, int $perPagina = 6, bool $mediaBoxEreditata = false): void
+function stampaPrenotazioni(string $percorso, int $pagine, int $perPagina = 6, bool $mediaBoxEreditata = false, bool $numeroIntero = false): void
 {
     $flussi = [];
     for ($p = 0; $p < $pagine; $p++) {
@@ -193,7 +199,7 @@ function stampaPrenotazioni(string $percorso, int $pagine, int $perPagina = 6, b
         for ($i = 1; $i <= $perPagina; $i++) {
             $record[] = record($p * $perPagina + $i);
         }
-        $flussi[] = paginaPrenotazioni($record, $p + 1);
+        $flussi[] = paginaPrenotazioni($record, $p + 1, $numeroIntero);
     }
     pdfConFlussi($percorso, $flussi, $mediaBoxEreditata);
 }
