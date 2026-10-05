@@ -215,7 +215,7 @@ function caricata(string $origine): string
     return $dest;
 }
 
-$job = Job::crea($utente, 'octo_scidoo', caricata($lungo), 'lunga.pdf', ['formato' => 'xlsx']);
+$job = Job::crea($utente, 'octo_prenotazioni', caricata($lungo), 'lunga.pdf', ['formato' => 'xlsx']);
 $id  = (int) $job['id'];
 Job::avviaInBackground($id);
 vero('senza processi in sfondo si prepara a tappe', is_file(Job::cartellaLavoro($job) . '/stato.json'));
@@ -269,7 +269,7 @@ vero('il file nuovo c\'è', is_file((string) $rifatto['file_out']));
 vero('e il vecchio è stato tolto', !is_file($vecchio));
 
 // Una tappa che muore sempre: ci si arrende, e si dice perché.
-$ostinato = Job::crea($utente, 'octo_scidoo', caricata($lungo), 'lunga.pdf', []);
+$ostinato = Job::crea($utente, 'octo_prenotazioni', caricata($lungo), 'lunga.pdf', []);
 Job::avviaInBackground((int) $ostinato['id']);
 $fileStato = Job::cartellaLavoro($ostinato) . '/stato.json';
 $statoOstinato = json_decode((string) file_get_contents($fileStato), true);
@@ -282,7 +282,7 @@ vero('e dice che è il server a fermarlo', str_contains((string) $arreso['errore
 vero('e il lavoro a metà è stato tolto', !is_dir(Job::cartellaLavoro($ostinato)));
 
 // Annullare butta il lavoro fatto.
-$annullato = Job::crea($utente, 'octo_scidoo', caricata($lungo), 'lunga.pdf', []);
+$annullato = Job::crea($utente, 'octo_prenotazioni', caricata($lungo), 'lunga.pdf', []);
 Job::avviaInBackground((int) $annullato['id']);
 Job::avanza((int) $annullato['id']);
 Job::annulla((int) $annullato['id']);
@@ -292,7 +292,7 @@ Job::avanza((int) $annullato['id']);
 vero('e un giro in più non la ricrea', !is_dir(Job::cartellaLavoro($annullato)));
 
 // Eliminare un job a metà toglie anche il suo lavoro.
-$aMeta = Job::crea($utente, 'octo_scidoo', caricata($lungo), 'lunga.pdf', []);
+$aMeta = Job::crea($utente, 'octo_prenotazioni', caricata($lungo), 'lunga.pdf', []);
 Job::avviaInBackground((int) $aMeta['id']);
 Job::avanza((int) $aMeta['id']);
 Job::elimina((int) $aMeta['id']);

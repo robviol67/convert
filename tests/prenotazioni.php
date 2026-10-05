@@ -16,6 +16,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/LettoreXlsx.php';
 
+use Vblite\Convert\Conversioni\OctoPrenotazioni\ConversionePrenotazioni;
 use Vblite\Convert\Conversioni\OctoScidoo\ConversioneOctoScidoo;
 use Vblite\Convert\Conversioni\OctoScidoo\Parser;
 use Vblite\Convert\Conversioni\OctoScidoo\Tracciato;
@@ -58,7 +59,7 @@ pdfConFlussi($pdf, $flussi);
 vero('il PDF di prova è stato scritto', is_file($pdf) && filesize($pdf) > 2000);
 
 // ── Riconoscimento ───────────────────────────────────────────────────────────
-$conversione = new ConversioneOctoScidoo();
+$conversione = new ConversionePrenotazioni();
 $v = $conversione->verifica($pdf);
 vero('la stampa prenotazioni viene accettata', $v['ok']);
 verifica('e viene detto quale stampa è', 'Stampa prenotazioni', $v['intestazione']['stampa'] ?? '');
@@ -155,12 +156,30 @@ verifica('e gli stessi numeri di prenotazione',
     array_column($estrattoIntero['righe'], 'npren'));
 verifica('e lo stesso primo cliente', $primo['cognome'], $estrattoIntero['righe'][0]['cognome']);
 
-// ── La stampa storica continua a funzionare ──────────────────────────────────
+// ── Due tipologie, due stampe: ognuna accetta la sua ─────────────────────────
+// Le due stampe portano gli stessi dati con colonne diverse, e scambiarle
+// darebbe un file sbagliato: ciascuna tipologia prende solo la sua, e dice
+// dov'è l'altra.
+$clienti = new ConversioneOctoScidoo();
+verifica('le due tipologie dichiarano stampe diverse',
+    ['clienti_presenti', 'prenotazioni'],
+    [$clienti->tracciatoAccettato(), $conversione->tracciatoAccettato()]);
+
+$scambiata = $clienti->verifica($pdf);
+verifica('la stampa prenotazioni non entra nella tipologia dei clienti', false, $scambiata['ok']);
+vero('e le viene detto quale stampa ha in mano', str_contains((string) $scambiata['motivo'], 'Stampa prenotazioni'));
+vero('e dove portarla', str_contains((string) $scambiata['motivo'], $conversione->manifest()['titolo']));
+
 $vecchia = __DIR__ . '/../../handoff_octo_scidoo/esempi/prenotazioni 2024 2025.pdf';
 if (is_file($vecchia)) {
-    $vVecchia = $conversione->verifica($vecchia);
-    vero('la stampa clienti presenti è ancora accettata', $vVecchia['ok']);
+    $vVecchia = $clienti->verifica($vecchia);
+    vero('la stampa clienti presenti è accettata dalla sua tipologia', $vVecchia['ok']);
     verifica('e riconosciuta come tale', 'Stampa clienti presenti', $vVecchia['intestazione']['stampa'] ?? '');
+
+    $alContrario = $conversione->verifica($vecchia);
+    verifica('e non entra in quella delle prenotazioni', false, $alContrario['ok']);
+    vero('con l\'indicazione della tipologia giusta',
+        str_contains((string) $alContrario['motivo'], $clienti->manifest()['titolo']));
 } else {
     echo "Stampa clienti di esempio assente: saltato il confronto fra i due tracciati.\n";
 }

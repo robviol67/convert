@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Vblite\Convert\Conversioni;
 
 use Vblite\Convert\Conversioni\Documenti\ConversioneDocumenti;
+use Vblite\Convert\Conversioni\OctoPrenotazioni\ConversionePrenotazioni;
 use Vblite\Convert\Conversioni\OctoScidoo\ConversioneOctoScidoo;
 use Vblite\Convert\Conversioni\PdfTabella\ConversionePdfTabella;
 use Vblite\Convert\Conversioni\Tabelle\ConversioneTabelle;
@@ -19,6 +20,7 @@ final class Registro
     /** @var list<class-string<Conversione>> */
     private const CLASSI = [
         ConversioneOctoScidoo::class,
+        ConversionePrenotazioni::class,
         ConversioneDocumenti::class,
         ConversioneTabelle::class,
         ConversionePdfTabella::class,

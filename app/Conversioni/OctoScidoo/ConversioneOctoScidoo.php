@@ -16,7 +16,7 @@ use Vblite\Convert\Supporto\SpezzaPdf;
  * sopra i venti megabyte. Anche converti() passa da qui, in un giro solo: il
  * codice è uno, e i test provano quello che gira sul server.
  */
-final class ConversioneOctoScidoo implements Conversione, ConversioneAPassi
+class ConversioneOctoScidoo implements Conversione, ConversioneAPassi
 {
     /**
      * Pagine lette in una tappa.
@@ -45,13 +45,54 @@ final class ConversioneOctoScidoo implements Conversione, ConversioneAPassi
         return require __DIR__ . '/manifest.php';
     }
 
+    /**
+     * La stampa che questa tipologia accetta.
+     *
+     * Octorate ne produce due che portano gli stessi dati — i clienti arrivati
+     * e partiti, e le prenotazioni che il check-in non l'hanno fatto — e il
+     * motore le legge entrambe. Ma una tipologia per ciascuna è più chiara di
+     * una che le prende tutte e due: chi carica sa cosa sta caricando, e se
+     * sbaglia stampa gli si dice dov'è l'altra.
+     */
+    public function tracciatoAccettato(): string
+    {
+        return 'clienti_presenti';
+    }
+
     public function verifica(string $percorsoIngresso): array
     {
         \Vblite\Convert\Errori::passo('motore · riconoscimento, apro il PDF');
         $esito = (new Parser())->riconosci($percorsoIngresso);
         \Vblite\Convert\Errori::passo('motore · riconoscimento concluso');
 
+        $trovato = $esito['intestazione']['tracciato'] ?? null;
+        if ($esito['ok'] && $trovato !== $this->tracciatoAccettato()) {
+            return [
+                'ok' => false,
+                'motivo' => sprintf(
+                    'Questa è una «%s», e qui va la «%s». %s',
+                    $esito['intestazione']['stampa'] ?? '?',
+                    Tracciato::perChiave($this->tracciatoAccettato())?->nome ?? '?',
+                    self::doveSiCarica((string) $trovato)
+                ),
+                'pagine' => $esito['pagine'],
+                'intestazione' => [],
+            ];
+        }
+
         return $esito;
+    }
+
+    /** La tipologia giusta per una stampa, da dire a chi ha sbagliato tessera. */
+    private static function doveSiCarica(string $tracciato): string
+    {
+        foreach (\Vblite\Convert\Conversioni\Registro::tutte() as $conversione) {
+            if ($conversione instanceof self && $conversione->tracciatoAccettato() === $tracciato) {
+                return 'Caricala in «' . $conversione->manifest()['titolo'] . '», dalla pagina iniziale.';
+            }
+        }
+
+        return 'Torna alla pagina iniziale e scegli la tipologia giusta.';
     }
 
     public function converti(string $percorsoIngresso, string $percorsoUscita, array $regole, ?callable $progresso = null): array
@@ -398,6 +439,10 @@ final class ConversioneOctoScidoo implements Conversione, ConversioneAPassi
             ? $intestazione['dal'] . ' – ' . $intestazione['al']
             : 'periodo non dichiarato';
 
+        // Come si chiamano le righe lo dice il manifest: nella stampa dei
+        // clienti sono righe cliente, in quella delle prenotazioni no.
+        $origine = $this->manifest()['lessico']['origine'] ?? 'righe lette';
+
         if ($campione) {
             return [
                 'sommario' => sprintf(
@@ -417,9 +462,10 @@ final class ConversioneOctoScidoo implements Conversione, ConversioneAPassi
 
         return [
             'sommario' => sprintf(
-                '%s pagine · %s righe cliente · %s prenotazioni · %s · testo nativo',
+                '%s pagine · %s %s · %s prenotazioni · %s · testo nativo',
                 number_format((int) $stato['pagine'], 0, ',', '.'),
                 number_format($righe, 0, ',', '.'),
+                $origine,
                 number_format($prenotazioni, 0, ',', '.'),
                 $periodo
             ),

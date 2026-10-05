@@ -205,7 +205,8 @@ final class Parser
             'ok' => true,
             'motivo' => null,
             'pagine' => $quante,
-            'intestazione' => $this->leggiTestata($chunk) + ['stampa' => $this->tracciato->nome],
+            'intestazione' => $this->leggiTestata($chunk)
+                + ['stampa' => $this->tracciato->nome, 'tracciato' => $this->tracciato->chiave],
         ];
     }
 
