@@ -500,8 +500,14 @@ switch ($pagina) {
         if (strlen($password) < 10) {
             $_SESSION['avviso'] = 'La password provvisoria deve avere almeno 10 caratteri.';
         } else {
-            Auth::reimpostaPassword((int) $_POST['id'], $password);
-            $_SESSION['avviso'] = 'Password reimpostata.';
+            try {
+                Auth::reimpostaPassword((int) $_POST['id'], $password);
+                $_SESSION['avviso'] = 'Password reimpostata.';
+            } catch (\RuntimeException $e) {
+                // L'utente protetto: la schermata non lo offre nemmeno, ma la
+                // rotta si difende da sola — è lei il confine, non il modulo.
+                $_SESSION['avviso'] = $e->getMessage();
+            }
         }
         header('Location: ?p=utenti');
         break;
@@ -513,8 +519,12 @@ switch ($pagina) {
         if (strlen($password) < 10) {
             $_SESSION['avviso'] = 'La password deve avere almeno 10 caratteri.';
         } else {
-            Auth::cambiaPassword((int) $utente['id'], $password);
-            $_SESSION['avviso'] = 'Password aggiornata.';
+            try {
+                Auth::cambiaPassword((int) $utente['id'], $password);
+                $_SESSION['avviso'] = 'Password aggiornata.';
+            } catch (\RuntimeException $e) {
+                $_SESSION['avviso'] = $e->getMessage();
+            }
         }
         header('Location: ?p=utenti');
         break;

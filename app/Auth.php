@@ -107,8 +107,56 @@ final class Auth
             ->execute([strtolower(trim($email)), trim($nome), self::hash($password), $ruolo]);
     }
 
+    /**
+     * L'amministratore che l'applicazione non può toccare.
+     *
+     * Chiunque entri in «Utenti» può reimpostare la password di chiunque
+     * altro: va bene fra pari, non per l'account che tiene in piedi tutto il
+     * resto. Questo indirizzo è l'unico che nessuna schermata, nessun ruolo e
+     * nessuna rotta può cambiare — scritto qui, nel codice, perché una regola
+     * che sta in una tabella la cambia chi ha accesso alla tabella.
+     *
+     * Resta una strada per rientrare, e sta **fuori** dall'applicazione: un
+     * file messo a mano sul server, che chiede la password a chi la deve
+     * scegliere e si cancella da solo (impostaDaEmergenza()). Chi può caricare
+     * file sul server può già fare qualunque cosa: la regola difende
+     * dall'interno, che è dove può sbagliare qualcuno in buona fede.
+     */
+    public const INTOCCABILE = 'robviol@insertsrl.com';
+
+    /** @param int|string $chi id dell'utente, o il suo indirizzo */
+    public static function intoccabile(int|string $chi): bool
+    {
+        if (is_string($chi)) {
+            return strtolower(trim($chi)) === self::INTOCCABILE;
+        }
+
+        $stmt = Database::pdo()->prepare('SELECT email FROM users WHERE id = ?');
+        $stmt->execute([$chi]);
+        $email = $stmt->fetchColumn();
+
+        return $email !== false && strtolower(trim((string) $email)) === self::INTOCCABILE;
+    }
+
+    /**
+     * Si ferma, e lo dice. Un rifiuto silenzioso lascerebbe credere a chi
+     * guarda — e a chi scriverà la prossima schermata — che l'operazione sia
+     * andata.
+     */
+    private static function vietaSeIntoccabile(int $userId): void
+    {
+        if (self::intoccabile($userId)) {
+            throw new \RuntimeException(
+                'La password di ' . self::INTOCCABILE . ' non si cambia dall\'applicazione: '
+                . 'è protetta da una regola scritta nel codice.'
+            );
+        }
+    }
+
     public static function cambiaPassword(int $userId, string $password): void
     {
+        self::vietaSeIntoccabile($userId);
+
         Database::pdo()
             ->prepare('UPDATE users SET password_hash = ?, deve_cambiare = 0 WHERE id = ?')
             ->execute([self::hash($password), $userId]);
@@ -116,8 +164,24 @@ final class Auth
 
     public static function reimpostaPassword(int $userId, string $password): void
     {
+        self::vietaSeIntoccabile($userId);
+
         Database::pdo()
             ->prepare('UPDATE users SET password_hash = ?, deve_cambiare = 1 WHERE id = ?')
+            ->execute([self::hash($password), $userId]);
+    }
+
+    /**
+     * La sola strada per rimettere la password dell'intoccabile.
+     *
+     * Non la chiama nessuna rotta dell'applicazione, di proposito: la chiama
+     * uno script d'emergenza caricato a mano sul server, protetto da un
+     * gettone, che si cancella appena ha finito. Vedi il kit K22 del modello.
+     */
+    public static function impostaDaEmergenza(int $userId, string $password): void
+    {
+        Database::pdo()
+            ->prepare('UPDATE users SET password_hash = ?, deve_cambiare = 0 WHERE id = ?')
             ->execute([self::hash($password), $userId]);
     }
 

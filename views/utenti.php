@@ -21,7 +21,12 @@ use Vblite\Convert\Vista;
     <p class="avviso buono" style="margin:var(--space-4) 0 0"><?= Vista::e($avviso) ?></p>
   <?php endif; ?>
 
-  <?php if ((int) $utente['deve_cambiare'] === 1): ?>
+  <?php if (Auth::intoccabile((string) $utente['email'])): ?>
+    <p class="avviso" style="margin:var(--space-4) 0 0">
+      La tua password è protetta da una regola scritta nel codice: non si cambia da qui, e nessun altro
+      utente può reimpostarla. Per cambiarla serve la procedura d'emergenza, dal server.
+    </p>
+  <?php elseif ((int) $utente['deve_cambiare'] === 1): ?>
     <form class="avviso" method="post" action="?p=cambia_password" style="margin:var(--space-4) 0 0;display:flex;gap:var(--space-3);align-items:center">
       <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
       <span>La tua password è ancora quella provvisoria: cambiala adesso.</span>
@@ -56,6 +61,9 @@ use Vblite\Convert\Vista;
           <td>
             <div class="tags">
               <span class="tag tag-accent"><?= $u['ruolo'] === 'admin' ? 'Amministratore' : Vista::e($u['ruolo']) ?></span>
+              <?php if (Auth::intoccabile((string) $u['email'])): ?>
+                <span class="tag tag-accent-2">protetto</span>
+              <?php endif; ?>
               <?php if ((int) $u['deve_cambiare'] === 1): ?>
                 <span class="tag tag-outline">password provvisoria</span>
               <?php endif; ?>
@@ -64,6 +72,9 @@ use Vblite\Convert\Vista;
           <td class="mono" style="text-align:right"><?= Vista::numero((int) $u['conversioni']) ?></td>
           <td class="mono"><?= Vista::e(Vista::quando($u['ultimo_accesso'])) ?></td>
           <td style="text-align:right">
+            <?php if (Auth::intoccabile((string) $u['email'])): ?>
+              <span style="font-size:13px;color:rgba(32,30,29,.55)">Non reimpostabile</span>
+            <?php else: ?>
             <form method="post" action="?p=utente_reimposta" style="display:flex;gap:6px;justify-content:flex-end">
               <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
               <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
@@ -71,6 +82,7 @@ use Vblite\Convert\Vista;
                      style="padding:4px 8px;font-size:13px;width:150px">
               <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px" type="submit">Reimposta</button>
             </form>
+            <?php endif; ?>
           </td>
         </tr>
       <?php endforeach; ?>
