@@ -21,19 +21,26 @@ use Vblite\Convert\Vista;
     <p class="avviso buono" style="margin:var(--space-4) 0 0"><?= Vista::e($avviso) ?></p>
   <?php endif; ?>
 
-  <?php if (Auth::intoccabile((string) $utente['email'])): ?>
-    <p class="avviso" style="margin:var(--space-4) 0 0">
-      La tua password è protetta da una regola scritta nel codice: non si cambia da qui, e nessun altro
-      utente può reimpostarla. Per cambiarla serve la procedura d'emergenza, dal server.
-    </p>
-  <?php elseif ((int) $utente['deve_cambiare'] === 1): ?>
-    <form class="avviso" method="post" action="?p=cambia_password" style="margin:var(--space-4) 0 0;display:flex;gap:var(--space-3);align-items:center">
-      <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
-      <span>La tua password è ancora quella provvisoria: cambiala adesso.</span>
-      <input class="input" type="password" name="password" placeholder="Nuova password" minlength="10" required style="width:220px">
-      <button class="btn btn-primary" type="submit">Cambia</button>
-    </form>
-  <?php endif; ?>
+  <?php // La propria password si cambia sempre da qui, non solo quando è
+        // provvisoria: altrimenti chi l'ha già cambiata una volta non ha più
+        // nessun posto dove rifarlo. ?>
+  <?php $provvisoria = (int) $utente['deve_cambiare'] === 1; ?>
+  <form class="avviso<?= $provvisoria ? '' : ' buono' ?>" method="post" action="?p=cambia_password"
+        style="margin:var(--space-4) 0 0;display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap">
+    <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
+    <span>
+      <?= $provvisoria
+        ? 'La tua password è ancora quella provvisoria: cambiala adesso.'
+        : 'La tua password: puoi cambiarla quando vuoi.' ?>
+      <?php if (Auth::intoccabile((string) $utente['email'])): ?>
+        <span style="display:block;font-size:13px;color:rgba(32,30,29,.6)">
+          Il tuo è l'utente protetto: la cambi solo tu, da qui. Nessun altro può reimpostarla.
+        </span>
+      <?php endif; ?>
+    </span>
+    <input class="input" type="password" name="password" placeholder="Nuova password" minlength="10" required style="width:220px">
+    <button class="btn btn-primary" type="submit">Cambia</button>
+  </form>
 
   <form id="nuovo" hidden method="post" action="?p=utente_nuovo" class="foglio" style="margin-top:var(--space-4);display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:var(--space-3);align-items:end">
     <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">
@@ -73,7 +80,7 @@ use Vblite\Convert\Vista;
           <td class="mono"><?= Vista::e(Vista::quando($u['ultimo_accesso'])) ?></td>
           <td style="text-align:right">
             <?php if (Auth::intoccabile((string) $u['email'])): ?>
-              <span style="font-size:13px;color:rgba(32,30,29,.55)">Non reimpostabile</span>
+              <span style="font-size:13px;color:rgba(32,30,29,.55)">La cambia solo lui</span>
             <?php else: ?>
             <form method="post" action="?p=utente_reimposta" style="display:flex;gap:6px;justify-content:flex-end">
               <input type="hidden" name="csrf" value="<?= Vista::e(Auth::gettone()) ?>">

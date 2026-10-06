@@ -116,11 +116,17 @@ final class Auth
      * nessuna rotta può cambiare — scritto qui, nel codice, perché una regola
      * che sta in una tabella la cambia chi ha accesso alla tabella.
      *
-     * Resta una strada per rientrare, e sta **fuori** dall'applicazione: un
-     * file messo a mano sul server, che chiede la password a chi la deve
-     * scegliere e si cancella da solo (impostaDaEmergenza()). Chi può caricare
-     * file sul server può già fare qualunque cosa: la regola difende
-     * dall'interno, che è dove può sbagliare qualcuno in buona fede.
+     * Il divieto è su chi gliela cambia, non su di lui: dal suo accesso, la
+     * sua password se la cambia come chiunque altro. Quello che nessuno può
+     * fare è cambiargliela — reimpostarla dall'elenco utenti, o chiamare il
+     * modulo col suo id da un'altra parte.
+     *
+     * Resta una strada per rientrare quando la password l'ha persa anche lui,
+     * e sta **fuori** dall'applicazione: un file messo a mano sul server, che
+     * chiede la password a chi la deve scegliere e si cancella da solo
+     * (impostaDaEmergenza()). Chi può caricare file sul server può già fare
+     * qualunque cosa: la regola difende dall'interno, che è dove può sbagliare
+     * qualcuno in buona fede.
      */
     public const INTOCCABILE = 'robviol@insertsrl.com';
 
@@ -143,28 +149,44 @@ final class Auth
      * guarda — e a chi scriverà la prossima schermata — che l'operazione sia
      * andata.
      */
-    private static function vietaSeIntoccabile(int $userId): void
+    private static function soloLuiStesso(int $userId): void
     {
-        if (self::intoccabile($userId)) {
+        if (!self::intoccabile($userId)) {
+            return;
+        }
+
+        // Chi sta chiedendo il cambio dev'essere lui, in carne e sessione. Il
+        // controllo si rifà qui e non solo nella rotta: il modulo è
+        // raggiungibile da qualunque codice futuro, e una regola che dipende da
+        // chi ti ha chiamato non è una regola.
+        $inCorso = self::utente();
+        if ($inCorso === null || (int) $inCorso['id'] !== $userId) {
             throw new \RuntimeException(
-                'La password di ' . self::INTOCCABILE . ' non si cambia dall\'applicazione: '
+                'La password di ' . self::INTOCCABILE . ' può cambiarla solo lui, dal suo accesso: '
                 . 'è protetta da una regola scritta nel codice.'
             );
         }
     }
 
+    /** La password che un utente cambia a sé stesso. */
     public static function cambiaPassword(int $userId, string $password): void
     {
-        self::vietaSeIntoccabile($userId);
+        self::soloLuiStesso($userId);
 
         Database::pdo()
             ->prepare('UPDATE users SET password_hash = ?, deve_cambiare = 0 WHERE id = ?')
             ->execute([self::hash($password), $userId]);
     }
 
+    /** La password che un utente reimposta a un altro, dall'elenco utenti. */
     public static function reimpostaPassword(int $userId, string $password): void
     {
-        self::vietaSeIntoccabile($userId);
+        if (self::intoccabile($userId)) {
+            throw new \RuntimeException(
+                'La password di ' . self::INTOCCABILE . ' non si reimposta: è protetta da una regola '
+                . 'scritta nel codice. Può cambiarla solo lui, dal suo accesso.'
+            );
+        }
 
         Database::pdo()
             ->prepare('UPDATE users SET password_hash = ?, deve_cambiare = 1 WHERE id = ?')

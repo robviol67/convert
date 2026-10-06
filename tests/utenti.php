@@ -3,10 +3,11 @@ declare(strict_types=1);
 /**
  * Verifiche dell'utente intoccabile: `php tests/utenti.php`.
  *
- * C'è un amministratore che l'applicazione non può toccare: nessuna schermata,
- * nessun ruolo, nessuna rotta può cambiargli la password. La regola sta nel
- * codice, e queste prove servono a tenerla lì — una protezione che si può
- * togliere senza che niente protesti non è una protezione.
+ * C'è un amministratore che nessun altro può toccare: la sua password la cambia
+ * solo lui, dal suo accesso, e nessuna schermata, nessun ruolo e nessuna rotta
+ * può reimpostargliela. La regola sta nel codice, e queste prove servono a
+ * tenerla lì — una protezione che si può togliere senza che niente protesti non
+ * è una protezione.
  *
  * Si prova anche la via d'uscita: la procedura d'emergenza, che sta fuori
  * dall'applicazione, deve continuare a funzionare. Senza, l'account sarebbe
@@ -79,20 +80,45 @@ verifica('un altro indirizzo non lo è', false, Auth::intoccabile('altro@esempio
 verifica('né un altro id', false, Auth::intoccabile($normale));
 verifica('né un id che non esiste', false, Auth::intoccabile(999999));
 
-// ── Nessuno gli cambia la password dall'applicazione ─────────────────────────
+// La sessione si avvia qui, esplicitamente: più avanti si finge di essere
+// questo o quell'utente scrivendo in $_SESSION, e farlo prima che la sessione
+// esista non avrebbe effetto. Legarlo all'ordine delle prove le renderebbe
+// fragili senza che si veda.
+Auth::utente();
+
+// ── Nessun altro gliela reimposta ────────────────────────────────────────────
 $prima = $hash($protetto);
 
 $motivo = rifiuto(static fn() => Auth::reimpostaPassword($protetto, 'qualunque-altra'));
 vero('reimpostare la password del protetto viene rifiutato', $motivo !== null);
 vero('e il rifiuto dice perché', str_contains((string) $motivo, 'protetta da una regola scritta nel codice'));
+vero('e dice chi può farlo', str_contains((string) $motivo, 'solo lui'));
 verifica('la password non è stata toccata', $prima, $hash($protetto));
 
-$motivo = rifiuto(static fn() => Auth::cambiaPassword($protetto, 'nemmeno-da-lui-stesso'));
-vero('nemmeno lui può cambiarsela da dentro', $motivo !== null);
+// Fuori da una sessione — uno script, un giro di manutenzione — non è «lui».
+$motivo = rifiuto(static fn() => Auth::cambiaPassword($protetto, 'da-uno-script'));
+vero('senza sessione il cambio è rifiutato', $motivo !== null);
 verifica('e la password resta quella', $prima, $hash($protetto));
 
-// La vecchia password continua a valere: il rifiuto non ha lasciato niente a metà.
+// Nemmeno un altro utente collegato può passare dalla porta del cambio.
+$_SESSION['user_id'] = $normale;
+$motivo = rifiuto(static fn() => Auth::cambiaPassword($protetto, 'da-un-altro-utente'));
+vero('un altro utente collegato non gliela cambia', $motivo !== null);
+verifica('e la password è sempre quella', $prima, $hash($protetto));
+
+// La vecchia password continua a valere: i rifiuti non hanno lasciato niente a metà.
 vero('la password di partenza vale ancora', password_verify('quella-di-partenza', $hash($protetto)));
+
+// ── Lui, dal suo accesso, se la cambia ───────────────────────────────────────
+$_SESSION['user_id'] = $protetto;
+verifica('dal suo accesso se la cambia', null, rifiuto(static fn() => Auth::cambiaPassword($protetto, 'scelta-da-lui-stesso')));
+vero('e vale davvero', password_verify('scelta-da-lui-stesso', $hash($protetto)));
+verifica('e non resta segnata come provvisoria', 0, (int) $pdo->query(
+    'SELECT deve_cambiare FROM users WHERE id = ' . $protetto
+)->fetchColumn());
+vero('ma reimpostargliela resta vietato anche a lui',
+    rifiuto(static fn() => Auth::reimpostaPassword($protetto, 'per-via-traversa')) !== null);
+$_SESSION['user_id'] = null;
 
 // ── Gli altri utenti si gestiscono come sempre ───────────────────────────────
 verifica('un altro utente si reimposta', null, rifiuto(static fn() => Auth::reimpostaPassword($normale, 'nuova-provvisoria')));
@@ -107,7 +133,7 @@ verifica('e non la segna come provvisoria', 0, (int) $pdo->query(
     'SELECT deve_cambiare FROM users WHERE id = ' . $protetto
 )->fetchColumn());
 vero('la regola vale ancora dopo l\'emergenza',
-    rifiuto(static fn() => Auth::cambiaPassword($protetto, 'un-altro-tentativo')) !== null);
+    rifiuto(static fn() => Auth::reimpostaPassword($protetto, 'un-altro-tentativo')) !== null);
 
 // ── La regola non si aggira cancellando l'utente ─────────────────────────────
 // Nell'applicazione non esiste nessuna cancellazione di utenti: se un domani
